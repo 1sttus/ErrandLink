@@ -29,7 +29,10 @@ export default function CustomerDashboard() {
     switchActiveRole,
     logoutUser,
     setView,
-    logVisitorActivity
+    logVisitorActivity,
+    currency,
+    setCurrency,
+    formatPrice
   } = useStore();
 
   // New Errand Form State
@@ -56,6 +59,11 @@ export default function CustomerDashboard() {
   // Wallet topup states
   const [topupAmount, setTopupAmount] = useState('50');
   const [walletFilterType, setWalletFilterType] = useState<'all' | 'escrow' | 'fund' | 'refund'>('all');
+
+  // Interactive Nigerian Fintech Payment simulation states
+  const [showNigeriaFundingModal, setShowNigeriaFundingModal] = useState(false);
+  const [fundingMethod, setFundingMethod] = useState<'options' | 'transfer' | 'card' | 'processing' | 'approved'>('options');
+  const [simulatedAccountNo] = useState(() => Math.floor(1000000000 + Math.random() * 9000000000).toString());
 
   const customerErrands = errands.filter(e => e.customerId === currentUser?.id);
   const activeErrands = customerErrands.filter(e => e.status !== 'completed');
@@ -133,13 +141,23 @@ export default function CustomerDashboard() {
                 <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" /> {currentUser?.rating}
               </span>
               <span>•</span>
-              <span className="font-extrabold text-[#006c49]">Balance: £{currentUser?.balance.toFixed(2)}</span>
+              <span className="font-extrabold text-[#006c49]">Balance: {formatPrice(currentUser?.balance || 0)}</span>
             </div>
           </div>
         </div>
 
         {/* Global Action Switcher with active role switches & guest backlink */}
         <div className="flex items-center flex-wrap gap-2.5">
+          <div className="flex items-center gap-1.5 bg-surface-container px-2.5 py-1 rounded-xl border border-surface-container-high text-[11px] text-on-surface-variant font-bold">
+            <span className="text-[10px] text-on-surface-variant/80 uppercase tracking-wider font-extrabold">Locale Base:</span>
+            <button
+              onClick={() => setCurrency(currency === 'NGN' ? 'GBP' : 'NGN')}
+              className="px-2 py-0.5 rounded text-[10px] font-black cursor-pointer bg-white text-[#006c49] border border-surface-container-high hover:bg-slate-50 transition-colors"
+            >
+              {currency === 'NGN' ? '🇳🇬 NGN (₦)' : '🇬🇧 GBP (£)'}
+            </button>
+          </div>
+
           <div className="bg-surface-container px-3 py-1 flex items-center gap-2 rounded-xl border border-surface-container-high text-[11px] text-on-surface-variant font-bold">
             <span>Active Mode:</span>
             <button
@@ -931,25 +949,25 @@ export default function CustomerDashboard() {
           {activeCustomerTab === 'wallet' && (
             <div className="space-y-6">
               {/* Balance Summary Card */}
-              <div className="bg-gradient-to-r from-[#006c49] to-teal-700 rounded-3xl p-6 text-white shadow-md relative overflow-hidden">
+              <div className="bg-gradient-to-r from-[#006c49] to-[#015137] rounded-3xl p-6 text-white shadow-md relative overflow-hidden text-left">
                 <div className="absolute right-0 top-0 bottom-0 w-32 bg-white/5 skew-x-12 translate-x-10 pointer-events-none"></div>
                 <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div>
-                    <span className="text-[10px] uppercase font-bold tracking-widest text-[#d8f8ed] block">Available simulated Balance</span>
-                    <span className="text-3xl font-black tracking-tight block mt-1.5">£{currentUser?.balance.toFixed(2)}</span>
+                    <span className="text-[10px] uppercase font-bold tracking-widest text-[#d8f8ed] block">Available Escrow Wallet Balance</span>
+                    <span className="text-3xl font-black tracking-tight block mt-1.5">{formatPrice(currentUser?.balance || 0)}</span>
                     <span className="text-xs text-[#d8f8ed]/80 block mt-1 font-medium">✓ Protected under ErrandLink Smart-Escrow Protocol</span>
                   </div>
 
                   <div className="flex gap-2 bg-white/10 p-2 rounded-2xl border border-white/10 items-center">
-                    <span className="text-sm font-bold flex items-center pl-2">£</span>
+                    <span className="text-sm font-bold flex items-center pl-2">{currency === 'NGN' ? '₦' : '£'}</span>
                     <input
                       type="number"
-                      min="10"
-                      max="5000"
+                      min="1"
+                      max="100000"
                       required
                       value={topupAmount}
                       onChange={(e) => setTopupAmount(e.target.value)}
-                      className="bg-transparent text-white font-black text-sm w-20 focus:outline-none placeholder-emerald-250 border-none outline-none"
+                      className="bg-transparent text-white font-black text-sm w-24 focus:outline-none placeholder-emerald-100 border-none outline-none"
                       placeholder="Amount"
                     />
                     <button
@@ -957,9 +975,8 @@ export default function CustomerDashboard() {
                       onClick={() => {
                         const amt = parseFloat(topupAmount);
                         if (isNaN(amt) || amt <= 0) return;
-                        fundCustomerWallet(amt);
-                        setTopupAmount('50');
-                        alert(`✓ Simulated top-up of £${amt.toFixed(2)} successful!`);
+                        setFundingMethod('options');
+                        setShowNigeriaFundingModal(true);
                       }}
                       className="bg-white text-[#006c49] font-extrabold text-xs px-4 py-2 rounded-xl border-none hover:bg-emerald-50 active:scale-95 duration-200 cursor-pointer shadow-sm"
                     >
@@ -1125,6 +1142,199 @@ export default function CustomerDashboard() {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+
+        {showNigeriaFundingModal && (
+          <div className="fixed inset-0 bg-[#0b1c30]/60 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white text-[#0b1c30] rounded-3xl p-6 max-w-sm w-full border border-slate-200 shadow-xl space-y-4 text-left"
+            >
+              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-black text-rose-500">pay</span>
+                  <span className="text-sm font-black text-[#00c5a2]">stack</span>
+                  <span className="text-[9px] font-bold bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-100 ml-1.5 uppercase">SIMULATOR</span>
+                </div>
+                <button
+                  onClick={() => setShowNigeriaFundingModal(false)}
+                  className="text-slate-400 hover:text-slate-600 font-extrabold cursor-pointer text-[10px]"
+                >
+                  ✕ CLOSE
+                </button>
+              </div>
+
+              <div>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">BILL TO: {currentUser?.name}</span>
+                <div className="flex justify-between items-baseline mt-1.5">
+                  <span className="text-xs text-slate-500 font-bold">Funding Target Wallet:</span>
+                  <span className="text-lg font-black text-slate-900 font-mono">
+                    {formatPrice(parseFloat(topupAmount) || 0)}
+                  </span>
+                </div>
+              </div>
+
+              {fundingMethod === 'options' && (
+                <div className="space-y-4">
+                  <span className="text-xs font-bold text-slate-550 block mb-1">Select your simulated payout channel</span>
+                  
+                  <button
+                    onClick={() => setFundingMethod('transfer')}
+                    className="w-full p-3.5 border border-slate-200 hover:border-[#00c5a2] rounded-2xl flex items-center gap-3 cursor-pointer text-left transition-all bg-slate-50"
+                  >
+                    <div className="text-lg">🏦</div>
+                    <div>
+                      <span className="text-xs font-black block text-slate-900">Direct Bank Transfer (Naira Instant)</span>
+                      <span className="text-[10px] text-slate-500 block mt-0.5 font-medium">Generates dynamic virtual account with 99.8% success rate</span>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => setFundingMethod('card')}
+                    className="w-full p-3.5 border border-slate-200 hover:border-[#00c5a2] rounded-2xl flex items-center gap-3 cursor-pointer text-left transition-all bg-slate-50"
+                  >
+                    <div className="text-lg text-cyan-600">💳</div>
+                    <div>
+                      <span className="text-xs font-black block text-slate-900">Naira Master/Visa Card Checkout</span>
+                      <span className="text-[10px] text-slate-500 block mt-0.5 font-medium">Classic secure 3D paystack card simulator with PIN checks</span>
+                    </div>
+                  </button>
+                </div>
+              )}
+
+              {fundingMethod === 'transfer' && (
+                <div className="space-y-4">
+                  <div className="bg-emerald-50 border border-emerald-100 p-3.5 rounded-2xl text-left text-xs text-emerald-850 space-y-1">
+                    <span className="text-[9px] uppercase font-bold text-emerald-500 tracking-wider block">SIMULATED VIRTUAL ACCOUNT DETAILS</span>
+                    <p className="font-semibold mt-1">Please transfer the correct total sum using your digital bank app:</p>
+                    <div className="flex justify-between items-center bg-white border border-emerald-100 rounded-xl p-2.5 mt-2 font-mono">
+                      <div>
+                        <span className="text-[9px] text-slate-400 font-bold block">BANK NAME</span>
+                        <span className="font-black text-slate-900 text-xs">WEMA Bank (MOCK)</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[9px] text-slate-400 font-bold block">ACCOUNT NUMBER</span>
+                        <span className="font-black text-slate-900 text-xs">{simulatedAccountNo}</span>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-500 block mt-1.5">Holder: ErrandLink Escrow - {currentUser?.name}</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFundingMethod('processing');
+                      setTimeout(() => {
+                        setFundingMethod('approved');
+                        fundCustomerWallet(parseFloat(topupAmount));
+                      }, 2000);
+                    }}
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs cursor-pointer rounded-2xl shadow-md transition-colors"
+                  >
+                    ✓ Simulate Successful Transfer Payment
+                  </button>
+                  
+                  <button
+                    type="button"
+                    onClick={() => setFundingMethod('options')}
+                    className="w-full text-center text-xs font-bold text-slate-400 hover:text-slate-650 cursor-pointer block bg-transparent border-none outline-none"
+                  >
+                    ← Back to channels
+                  </button>
+                </div>
+              )}
+
+              {fundingMethod === 'card' && (
+                <div className="space-y-4">
+                  <div className="space-y-2 text-left">
+                    <div className="space-y-1">
+                      <label className="text-[10px] uppercase font-bold text-slate-500 font-extrabold">Card Number</label>
+                      <input
+                        type="text"
+                        disabled
+                        value="5061 •••• •••• 2948 (Naira Master)"
+                        className="w-full h-10 px-3 bg-slate-50 border rounded-xl text-xs font-mono font-bold text-slate-800"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <label className="text-[10px] uppercase font-bold text-slate-500 font-extrabold">CVV</label>
+                        <input
+                          type="password"
+                          disabled
+                          value="394"
+                          className="w-full h-10 px-3 bg-slate-50 border rounded-xl text-xs font-mono font-bold text-[#0b1c30]"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] uppercase font-bold text-slate-500 font-extrabold">Security PIN</label>
+                        <input
+                          type="password"
+                          value="••••"
+                          disabled
+                          className="w-full h-10 px-3 bg-slate-50 border rounded-xl text-xs font-mono font-bold text-[#0b1c30]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFundingMethod('processing');
+                      setTimeout(() => {
+                        setFundingMethod('approved');
+                        fundCustomerWallet(parseFloat(topupAmount));
+                      }, 2000);
+                    }}
+                    className="w-full py-3 bg-[#006c49] text-white font-extrabold text-xs cursor-pointer rounded-2xl shadow-md hover:bg-[#005137] transition-colors"
+                  >
+                    Verify Card & Pay {formatPrice(parseFloat(topupAmount) || 0)}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFundingMethod('options')}
+                    className="w-full text-center text-xs font-bold text-slate-400 hover:text-slate-650 cursor-pointer block bg-transparent border-none outline-none"
+                  >
+                    ← Back to channels
+                  </button>
+                </div>
+              )}
+
+              {fundingMethod === 'processing' && (
+                <div className="py-8 text-center space-y-4">
+                  <div className="w-12 h-12 border-4 border-[#006c49] border-t-transparent rounded-full animate-spin mx-auto"></div>
+                  <div>
+                    <h4 className="text-xs font-black text-slate-900">Verifying Settlement Node...</h4>
+                    <p className="text-[10px] text-slate-500 mt-1">Acquiring secure NIP ledger receipts via Interswitch router</p>
+                  </div>
+                </div>
+              )}
+
+              {fundingMethod === 'approved' && (
+                <div className="py-6 text-center space-y-4">
+                  <div className="w-12 h-12 bg-emerald-100 text-emerald-800 rounded-full flex items-center justify-center text-base font-black mx-auto">✓</div>
+                  <div>
+                    <h4 className="text-sm font-black text-[#006c49]">FINANCIAL ESCROW SECURED!</h4>
+                    <p className="text-xs text-slate-500 mt-1 font-medium">Funds successfully locked via secure payment simulator node.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowNigeriaFundingModal(false);
+                      setTopupAmount('50');
+                    }}
+                    className="w-full py-2.5 bg-slate-100 hover:bg-slate-202 text-slate-800 text-xs font-black rounded-xl duration-200 cursor-pointer"
+                  >
+                    Complete Handshake
+                  </button>
+                </div>
+              )}
             </motion.div>
           </div>
         )}

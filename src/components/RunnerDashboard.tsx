@@ -28,7 +28,10 @@ export default function RunnerDashboard() {
     switchActiveRole,
     logoutUser,
     setView,
-    logVisitorActivity
+    logVisitorActivity,
+    currency,
+    setCurrency,
+    formatPrice
   } = useStore();
 
   const [chatMessage, setChatMessage] = useState('');
@@ -44,6 +47,10 @@ export default function RunnerDashboard() {
 
   // Bank withdrawal form state
   const [withdrawAmount, setWithdrawAmount] = useState('25');
+  const [payoutBankName, setPayoutBankName] = useState('Moniepoint Microfinance');
+  const [payoutAccountNo, setPayoutAccountNo] = useState('8129482034');
+  const [isVerifyingNuban, setIsVerifyingNuban] = useState(false);
+  const [resolvedNubanName, setResolvedNubanName] = useState('MARCUS MILLER (Verified Rider)');
 
   // Available jobs (posted, no runner assigned yet)
   const availableErrands = errands.filter(e => e.status === 'posted');
@@ -109,13 +116,23 @@ export default function RunnerDashboard() {
                 <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" /> {currentUser?.rating || 5.0}
               </span>
               <span>•</span>
-              <span className="font-extrabold text-[#006c49]">Simulated Wallet: £{currentUser?.balance.toFixed(2)}</span>
+              <span className="font-extrabold text-[#006c49]">Simulated Wallet: {formatPrice(currentUser?.balance || 0)}</span>
             </div>
           </div>
         </div>
 
         {/* Global Action Switcher with active role switches & guest backlink */}
         <div className="flex items-center flex-wrap gap-2.5">
+          <div className="flex items-center gap-1.5 bg-surface-container px-2.5 py-1 rounded-xl border border-surface-container-high text-[11px] text-on-surface-variant font-bold">
+            <span className="text-[10px] text-on-surface-variant/80 uppercase tracking-wider font-extrabold">Locale Base:</span>
+            <button
+              onClick={() => setCurrency(currency === 'NGN' ? 'GBP' : 'NGN')}
+              className="px-2 py-0.5 rounded text-[10px] font-black cursor-pointer bg-white text-[#006c49] border border-surface-container-high hover:bg-slate-50 transition-colors"
+            >
+              {currency === 'NGN' ? '🇳🇬 NGN (₦)' : '🇬🇧 GBP (£)'}
+            </button>
+          </div>
+
           <div className="bg-surface-container px-3 py-1 flex items-center gap-2 rounded-xl border border-surface-container-high text-[11px] text-on-surface-variant font-bold">
             <span>Active Mode:</span>
             <button
@@ -636,38 +653,38 @@ export default function RunnerDashboard() {
           {activeRunnerTab === 'earnings' && (
             <div className="space-y-6">
               {/* Dynamic stats banner */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="p-5 bg-surface-container-lowest border border-surface-container rounded-2xl shadow-sm text-left">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-left">
+                <div className="p-5 bg-surface-container-lowest border border-surface-container rounded-2xl shadow-sm">
                   <span className="text-xs font-bold text-on-surface-variant block uppercase tracking-wider">
-                    Total balance (£)
+                    Total balance
                   </span>
-                  <div className="text-2xl font-black text-primary mt-1.5">
-                    £{currentUser?.balance.toFixed(2)}
+                  <div className="text-2xl font-black text-[#006c49] mt-1.5">
+                    {formatPrice(currentUser?.balance || 0)}
                   </div>
-                  <span className="text-[10px] text-[#006c49] font-extrabold block mt-1">Available to withdraw</span>
+                  <span className="text-[10px] text-[#006c49] font-extrabold block mt-1">Available for cashout</span>
                 </div>
 
-                <div className="p-5 bg-surface-container-lowest border border-surface-container rounded-2xl shadow-sm text-left">
+                <div className="p-5 bg-surface-container-lowest border border-surface-container rounded-2xl shadow-sm">
                   <span className="text-xs font-bold text-on-surface-variant block uppercase tracking-wider">
                     Claimed Escrow Holdings
                   </span>
                   <div className="text-2xl font-black text-amber-700 mt-1.5">
-                    £{activeErrands.reduce((acc, curr) => acc + curr.payout, 0).toFixed(2)}
+                    {formatPrice(activeErrands.reduce((acc, curr) => acc + curr.payout, 0))}
                   </div>
-                  <span className="text-[10px] text-amber-800 font-extrabold block mt-1">Locked until delivery verification</span>
+                  <span className="text-[10px] text-amber-800 font-extrabold block mt-1">Locked until delivery verify</span>
                 </div>
 
-                <div className="p-5 bg-surface-container-lowest border border-surface-container rounded-2xl shadow-sm text-left">
+                <div className="p-5 bg-surface-container-lowest border border-surface-container rounded-2xl shadow-sm">
                   <span className="text-xs font-bold text-on-surface-variant block uppercase tracking-wider">
                     Jobs Completed
                   </span>
-                  <div className="text-2xl font-black text-[#006c49] mt-1.5">
+                  <div className="text-2xl font-black text-secondary mt-1.5">
                     {currentUser?.jobsCompleted || completedErrandsByRunner.length} tasks
                   </div>
                   <span className="text-[10px] text-on-surface-variant block mt-1 font-medium">All-time courier drops</span>
                 </div>
 
-                <div className="p-5 bg-surface-container-lowest border border-surface-container rounded-2xl shadow-sm text-left">
+                <div className="p-5 bg-surface-container-lowest border border-surface-container rounded-2xl shadow-sm">
                   <span className="text-xs font-bold text-on-surface-variant block uppercase tracking-wider">
                     Trust Rating
                   </span>
@@ -682,56 +699,112 @@ export default function RunnerDashboard() {
               <div className="bg-surface-container-lowest border border-surface-container rounded-3xl p-6 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-6 items-start text-left">
                 <div className="space-y-4">
                   <div>
-                    <h3 className="text-sm font-black text-[#0b1c30]">Bank Account Withdrawals</h3>
-                    <p className="text-xs text-on-surface-variant font-medium mt-0.5">Transfer your secure courier balance instantly to your physical bank account</p>
+                    <h3 className="text-sm font-black text-[#0b1c30]">NIP Bank Earnings Payout (Nigeria Instant Settlement)</h3>
+                    <p className="text-xs text-on-surface-variant font-medium mt-0.5">Transfer your secure courier balance instantly to your physical bank account via Paystack Rails</p>
                   </div>
 
-                  <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-2 text-xs font-semibold text-slate-800">
-                    <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Simulated Target Bank Card</span>
-                    <div className="flex justify-between mt-1">
-                      <span>Recipient Bank name:</span>
-                      <span className="font-bold text-slate-950 font-mono">{currentUser?.bankName || 'NatWest Private'}</span>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-[10px] font-black uppercase text-slate-500 mb-1">Select Beneficiary Bank</label>
+                      <select
+                        value={payoutBankName}
+                        onChange={(e) => setPayoutBankName(e.target.value)}
+                        className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none"
+                      >
+                        <option value="Moniepoint Microfinance">Moniepoint Microfinance 🇳🇬</option>
+                        <option value="OPay Digital Bank">OPay Digital Bank 🇳🇬</option>
+                        <option value="Kuda Microfinance Bank">Kuda Microfinance 🇳🇬</option>
+                        <option value="GTBank Nigeria">GTBank (Guaranty Trust) 🇳🇬</option>
+                        <option value="Zenith Bank Plc">Zenith Bank Plc 🇳🇬</option>
+                        <option value="Access Bank Plc">Access Bank Plc 🇳🇬</option>
+                        <option value="United Bank for Africa (UBA)">UBA (United Bank for Africa) 🇳🇬</option>
+                        <option value="First Bank of Nigeria">First Bank of Nigeria 🇳🇬</option>
+                      </select>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Sort Code:</span>
-                      <span className="font-bold text-slate-950 font-mono">{currentUser?.bankSortCode || '40-11-23'}</span>
-                    </div>
-                    <div className="flex justify-between font-medium">
-                      <span>Account Number:</span>
-                      <span className="font-bold text-slate-950 font-mono">{currentUser?.bankAccountNumber || '••••4567'}</span>
+
+                    <div>
+                      <label className="block text-[10px] font-black uppercase text-slate-500 mb-1-5">Recipient Account Number (10-Digit NUBAN)</label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          maxLength={10}
+                          value={payoutAccountNo}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/\D/g, '');
+                            setPayoutAccountNo(val);
+                            if (val.length === 10) {
+                              setIsVerifyingNuban(true);
+                              setResolvedNubanName('');
+                              setTimeout(() => {
+                                setIsVerifyingNuban(false);
+                                setResolvedNubanName('MARCUS MILLERMiller (Verified Runner Profile)');
+                              }, 1200);
+                            }
+                          }}
+                          placeholder="e.g. 0123456789"
+                          className="w-full h-10 pl-3 pr-20 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 focus:outline-none"
+                        />
+                        {isVerifyingNuban && (
+                          <div className="absolute right-3.5 top-2.5 w-5 h-5 border-2 border-[#006c49] border-t-transparent rounded-full animate-spin"></div>
+                        )}
+                      </div>
+                      
+                      {resolvedNubanName && !isVerifyingNuban && (
+                        <p className="text-[10px] font-black text-emerald-600 mt-1.5 flex items-center gap-1">
+                          ✓ ACCOUNT NAME RESOLVED: <span className="font-mono text-[9px] uppercase bg-emerald-50 px-1.5 py-0.5 border border-emerald-100 rounded text-emerald-850">{resolvedNubanName}</span>
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
 
-                <div className="space-y-3.5 bg-slate-50 p-5 rounded-2xl border border-slate-100">
-                  <span className="text-xs font-black uppercase text-slate-800 tracking-wider">Withdraw Funds Form</span>
-                  <div className="space-y-1">
-                    <label className="block text-[10px] font-bold text-slate-500">Amount to Transfer (£)</label>
+                <div className="space-y-3.5 bg-slate-50 p-5 rounded-2xl border border-slate-100 h-full flex flex-col justify-between">
+                  <div>
+                    <span className="text-xs font-black uppercase text-slate-800 tracking-wider">Withdraw Earnings</span>
+                    <p className="text-[11px] text-slate-500 mt-1 font-medium leading-relaxed">
+                      All platform payouts undergo a automated dispute holding ledger check to confirm no unresolved locks are currently pending.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2 mt-4">
+                    <label className="block text-[10px] font-bold text-slate-500">Amount to Transfer ({currency === 'NGN' ? '₦' : '£'})</label>
                     <div className="flex gap-2">
                       <input
                         type="number"
                         min="1"
-                        max="10000"
+                        max="1000000"
                         value={withdrawAmount}
                         onChange={(e) => setWithdrawAmount(e.target.value)}
-                        className="bg-white border rounded-xl px-3 py-2 text-sm font-black text-slate-800 focus:outline-none w-32 border-slate-200"
+                        className="bg-white border rounded-xl px-3 py-2 text-sm font-black text-slate-850 focus:outline-none w-32 border-slate-200"
                       />
                       <button
                         type="button"
+                        disabled={isVerifyingNuban}
                         onClick={() => {
                           const amt = parseFloat(withdrawAmount);
                           if (isNaN(amt) || amt <= 0) return;
-                          if (amt > (currentUser?.balance || 0)) {
-                            alert('❌ Insufficient balance in your simulated wallet.');
+
+                          // Compute amount based on current viewing currency
+                          const currentBal = currentUser?.balance || 0;
+                          const internalWithdrawAmt = currency === 'NGN' ? amt / 2000 : amt;
+
+                          if (internalWithdrawAmt > currentBal) {
+                            alert(`❌ INSUFFICIENT FUNDS: Your balance is only ${formatPrice(currentBal)}. Please request of smaller sum.`);
                             return;
                           }
-                          withdrawRunnerEarnings(amt);
-                          alert(`✓ SIMULATED TRANSFER SUCCESSFUL: £${amt.toFixed(2)} dispatched to your ${currentUser?.bankName || 'NatWest'} account!`);
-                          setWithdrawAmount('25');
+
+                          // Invoke store withdrawal
+                          const result = withdrawRunnerEarnings(internalWithdrawAmt, payoutBankName, "058-012", payoutAccountNo);
+                          if (result?.success) {
+                            alert(`✓ INSTANT PAYOUT SUCCESSFUL!\nDispatched ${formatPrice(internalWithdrawAmt)} to ${payoutBankName} (A/C: ${payoutAccountNo})!`);
+                            setWithdrawAmount('25');
+                          } else {
+                            alert(`❌ Payout error: ${result?.error || 'Unknown ledger failure'}`);
+                          }
                         }}
-                        className="flex-1 bg-secondary text-on-secondary hover:bg-[#005137] duration-200 text-xs font-extrabold rounded-xl shadow-sm cursor-pointer"
+                        className="flex-1 bg-secondary text-on-secondary hover:bg-[#005137] duration-200 text-xs font-extrabold rounded-xl shadow-sm cursor-pointer py-2.5"
                       >
-                        Initiate Simulated Withdrawal
+                        Initiate Instant Pay
                       </button>
                     </div>
                   </div>
@@ -740,8 +813,8 @@ export default function RunnerDashboard() {
 
               {/* Weekly earnings income graphics representation */}
               <div className="bg-surface-container-lowest border rounded-3xl p-6 shadow-sm">
-                <div className="mb-4">
-                  <h3 className="text-sm font-black text-[#0b1c30]">Weekly Income Distribution (£)</h3>
+                <div className="mb-4 text-left">
+                  <h3 className="text-sm font-black text-[#0b1c30]">Weekly Income Distribution</h3>
                   <p className="text-xs text-on-surface-variant">Telemetry log of earnings from active transit jobs claimed</p>
                 </div>
 
@@ -755,7 +828,7 @@ export default function RunnerDashboard() {
                         contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', borderColor: '#e5eeff' }}
                         itemStyle={{ fontSize: '11px', fontWeight: 'bold' }}
                       />
-                      <Bar dataKey="amount" fill="#004ac6" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="amount" fill="#006c49" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -775,7 +848,7 @@ export default function RunnerDashboard() {
                           <span className="text-[10px] text-on-surface-variant block mt-0.5">Finished on: {new Date(job.createdAt).toLocaleDateString()}</span>
                         </div>
                         <span className="text-xs font-bold text-[#006c49] bg-emerald-50 px-2 py-1 rounded-md">
-                          +£{job.payout.toFixed(2)}
+                          +{formatPrice(job.payout)}
                         </span>
                       </div>
                     ))}

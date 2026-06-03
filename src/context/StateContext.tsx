@@ -14,6 +14,11 @@ interface StateContextType {
   activeVendorTab: 'orders' | 'products' | 'analytics' | 'visitors';
   selectedErrandId: string | null;
   
+  // Localization Mode
+  currency: 'NGN' | 'GBP';
+  setCurrency: (cur: 'NGN' | 'GBP') => void;
+  formatPrice: (amountGbp: number) => string;
+  
   // Actions
   setView: (view: 'onboarding' | 'login' | 'signup' | 'customer' | 'runner' | 'vendor' | 'guest' | 'admin') => void;
   selectRoleForOnboarding: (role: UserRole | null) => void;
@@ -290,6 +295,24 @@ export const StateProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [currentView, setView] = useState<'onboarding' | 'login' | 'signup' | 'customer' | 'runner' | 'vendor' | 'guest' | 'admin'>('guest');
   const [selectedRoleForOnboarding, selectRoleForOnboarding] = useState<UserRole | null>(null);
   
+  // Persistent Currency Mode for Nigeria (NGN is default)
+  const [currency, setCurrency] = useState<'NGN' | 'GBP'>(() => {
+    const saved = localStorage.getItem('errandlink_currency');
+    return (saved as 'NGN' | 'GBP') || 'NGN';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('errandlink_currency', currency);
+  }, [currency]);
+
+  const formatPrice = (amountGbp: number) => {
+    if (currency === 'NGN') {
+      // Simple 1 GBP = ₦2000 conversion for Nigeria MVP context
+      return `₦${Math.round(amountGbp * 2000).toLocaleString()}`;
+    }
+    return `£${amountGbp.toFixed(2)}`;
+  };
+  
   // Persistent items using localStorage
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
     const saved = localStorage.getItem('errandlink_user');
@@ -379,9 +402,9 @@ export const StateProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         jobsCompleted: 34,
         todayEarnings: 75.24,
         pendingEscrowEarnings: 15.50,
-        bankName: 'Monzo Bank',
-        bankSortCode: '04-00-04',
-        bankAccountNumber: '94821034',
+        bankName: 'GTBank Nigeria',
+        bankSortCode: '058-012',
+        bankAccountNumber: '0129482034',
         verification: {
           phoneVerified: true,
           idVerified: true,
@@ -762,18 +785,22 @@ export const StateProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setTransactions(prev => [checkTx, ...prev]);
   };
 
-  const withdrawRunnerEarnings = (amount: number, bankName: string, bankSortCode: string, bankAccountNumber: string) => {
+  const withdrawRunnerEarnings = (amount: number, bankName: string = '', bankSortCode: string = '', bankAccountNumber: string = '') => {
     if (!currentUser) return { success: false, error: 'User session not active' };
     if (currentUser.balance < amount) {
       return { success: false, error: 'Insufficient wallet earnings balance' };
     }
     
+    const finalBank = bankName || currentUser.bankName || 'GTBank Nigeria';
+    const finalSort = bankSortCode || currentUser.bankSortCode || '058-012';
+    const finalAcc = bankAccountNumber || currentUser.bankAccountNumber || '0129482034';
+
     setCurrentUser(prev => prev ? {
       ...prev,
       balance: Number((prev.balance - amount).toFixed(2)),
-      bankName,
-      bankSortCode,
-      bankAccountNumber
+      bankName: finalBank,
+      bankSortCode: finalSort,
+      bankAccountNumber: finalAcc
     } : null);
 
     const listTx: WalletTransaction = {
@@ -781,7 +808,7 @@ export const StateProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       userId: currentUser.id,
       amount,
       type: 'debit',
-      title: `Withdrew Earnings to ${bankName}`,
+      title: `Withdrew Earnings to ${finalBank}`,
       category: 'withdrawal',
       timestamp: new Date().toISOString()
     };
@@ -1165,6 +1192,10 @@ export const StateProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       activeRunnerTab,
       activeVendorTab,
       selectedErrandId,
+      
+      currency,
+      setCurrency,
+      formatPrice,
       
       setView,
       selectRoleForOnboarding,

@@ -7,6 +7,7 @@ import CustomerDashboard from './components/CustomerDashboard';
 import RunnerDashboard from './components/RunnerDashboard';
 import VendorDashboard from './components/VendorDashboard';
 import GuestDashboard from './components/GuestDashboard';
+import AdminDashboard from './components/AdminDashboard';
 import SupportFeedback from './components/SupportFeedback';
 
 function MainApp() {
@@ -26,6 +27,8 @@ function MainApp() {
         return <RunnerDashboard />;
       case 'vendor':
         return <VendorDashboard />;
+      case 'admin':
+        return <AdminDashboard />;
       case 'guest':
         return <GuestDashboard />;
       default:
