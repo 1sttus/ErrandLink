@@ -1,4 +1,4 @@
-export type UserRole = 'customer' | 'runner' | 'vendor';
+export type UserRole = 'customer' | 'runner' | 'vendor' | 'admin';
 
 export interface Message {
   id: string;
@@ -7,12 +7,24 @@ export interface Message {
   timestamp: string;
 }
 
+export type ErrandStatus = 
+  | 'pending'
+  | 'accepted'
+  | 'runner_en_route'
+  | 'item_picked_up'
+  | 'in_transit'
+  | 'delivered'
+  | 'awaiting_otp'
+  | 'completed'
+  | 'disputed'
+  | 'resolved';
+
 export interface Errand {
   id: string;
   title: string;
   description: string;
-  category: 'delivery' | 'shopping' | 'pet' | 'vendor_order' | 'custom';
-  status: 'posted' | 'assigned' | 'in_progress' | 'completed';
+  category: 'delivery' | 'shopping' | 'pet' | 'vendor_order' | 'custom' | 'package' | 'buy_deliver' | 'food' | 'documents';
+  status: ErrandStatus;
   payout: number;
   location: string;
   latitude: number;
@@ -27,6 +39,25 @@ export interface Errand {
   items: string[];
   messages: Message[];
   imageUrl?: string;
+
+  // Escrow & OTP system variables
+  deliveryPin: string; // 4-digit PIN e.g., '2748'
+  escrowStatus: 'held' | 'released' | 'frozen' | 'none';
+  isFunded: boolean;
+  platformFee: number;
+  runnerFee: number;
+  totalEscrowAmount: number;
+  pickupLocation: string;
+  deliveryLocation: string;
+  
+  // Proof of delivery
+  deliveryPhoto?: string;
+  recipientPhoto?: string;
+  deliveryNotes?: string;
+
+  // Disputes
+  disputeReason?: 'wrong_item' | 'damaged' | 'not_received' | 'other' | string;
+  disputeNotes?: string;
 }
 
 export interface VendorProduct {
@@ -41,6 +72,13 @@ export interface VendorProduct {
   type?: 'good' | 'service';
 }
 
+export interface RunnerVerification {
+  phoneVerified: boolean;
+  idVerified: boolean;
+  selfieVerified: boolean;
+  bankVerified: boolean;
+}
+
 export interface UserProfile {
   id: string;
   role: UserRole;
@@ -50,4 +88,37 @@ export interface UserProfile {
   avatarUrl?: string;
   rating: number;
   jobsCompleted?: number;
+  
+  // Wallet metrics for Runners
+  todayEarnings?: number;
+  pendingEscrowEarnings?: number;
+  bankName?: string;
+  bankSortCode?: string;
+  bankAccountNumber?: string;
+
+  // Verification
+  verification?: RunnerVerification;
 }
+
+export interface WalletTransaction {
+  id: string;
+  userId: string;
+  amount: number;
+  type: 'credit' | 'debit';
+  title: string;
+  category: 'escrow_hold' | 'escrow_release' | 'wallet_fund' | 'runner_payout' | 'withdrawal' | 'refund' | 'platform_commission';
+  timestamp: string;
+  errandId?: string;
+}
+
+export interface StoreVisitor {
+  id: string;
+  name: string;
+  visitedAt: string;
+  action: string;
+  role: 'guest' | 'customer' | 'runner';
+  thanked: boolean;
+  thankedMessage?: string | null;
+}
+
+

@@ -3,28 +3,33 @@ import { useStore } from '../context/StateContext';
 import { 
   Sparkles, Plus, Navigation, Clock, CheckCircle, Store, 
   MapPin, RefreshCw, Send, Trash2, LogOut, ArrowRight, DollarSign,
-  AlertCircle, Briefcase, ShoppingBag, MessageSquare, Star
+  AlertCircle, Briefcase, ShoppingBag, MessageSquare, Star, ShieldAlert, ShieldCheck, CreditCard, Lock, RotateCcw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Errand, UserRole } from '../types';
+import { Errand, UserRole, ErrandStatus } from '../types';
 
 export default function CustomerDashboard() {
   const {
     currentUser,
     errands,
     products,
+    transactions,
     activeCustomerTab,
     selectedErrandId,
     setCustomerTab,
     createErrand,
+    fundAndPublishErrand,
     cancelErrand,
     setSelectedErrandId,
     orderProduct,
     sendMessage,
+    raiseDispute,
+    fundCustomerWallet,
     simulateRunnerActivity,
     switchActiveRole,
     logoutUser,
-    setView
+    setView,
+    logVisitorActivity
   } = useStore();
 
   // New Errand Form State
@@ -42,6 +47,15 @@ export default function CustomerDashboard() {
   const [selectedProduct, setSelectedProduct] = useState<typeof products[0] | null>(null);
   const [qty, setQty] = useState(1);
   const [deliveryAddress, setDeliveryAddress] = useState('');
+
+  // Dispute local state entries
+  const [showDisputeForm, setShowDisputeForm] = useState(false);
+  const [disputeReasonSelection, setDisputeReasonSelection] = useState('Wrong Item Delivered');
+  const [disputeNotes, setDisputeNotes] = useState('');
+
+  // Wallet topup states
+  const [topupAmount, setTopupAmount] = useState('50');
+  const [walletFilterType, setWalletFilterType] = useState<'all' | 'escrow' | 'fund' | 'refund'>('all');
 
   const customerErrands = errands.filter(e => e.customerId === currentUser?.id);
   const activeErrands = customerErrands.filter(e => e.status !== 'completed');
@@ -86,6 +100,9 @@ export default function CustomerDashboard() {
   const handleProductBuy = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProduct || !deliveryAddress.trim()) return;
+    if (currentUser) {
+      logVisitorActivity(currentUser.name, `Bought: ${selectedProduct.name} x${qty} and dispatched runner`, 'customer');
+    }
     orderProduct(selectedProduct.id, qty, deliveryAddress);
     setSelectedProduct(null);
     setQty(1);
@@ -194,7 +211,12 @@ export default function CustomerDashboard() {
                 )}
               </button>
               <button
-                onClick={() => setCustomerTab('shop')}
+                onClick={() => {
+                  setCustomerTab('shop');
+                  if (currentUser) {
+                    logVisitorActivity(currentUser.name, 'Browsed products in the Local Organic Bazaar', 'customer');
+                  }
+                }}
                 className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-xl transition-all cursor-pointer ${
                   activeCustomerTab === 'shop'
                     ? 'bg-primary text-on-primary shadow-sm'
@@ -212,6 +234,16 @@ export default function CustomerDashboard() {
                 }`}
               >
                 <CheckCircle className="w-4 h-4" /> Past History
+              </button>
+              <button
+                onClick={() => setCustomerTab('wallet')}
+                className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-xl transition-all cursor-pointer ${
+                  activeCustomerTab === 'wallet'
+                    ? 'bg-primary text-on-primary shadow-sm'
+                    : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'
+                }`}
+              >
+                <DollarSign className="w-4 h-4" /> Secure Wallet & Escrow
               </button>
             </div>
           </div>
@@ -394,15 +426,31 @@ export default function CustomerDashboard() {
                             <MapPin className="w-3 h-3 text-outline flex-shrink-0" /> {e.location}
                           </span>
                           <div className="mt-2.5 flex items-center justify-between text-[11px]">
-                            <span className={`px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
-                              e.status === 'posted' ? 'bg-orange-100 text-orange-700' :
-                              e.status === 'assigned' ? 'bg-indigo-100 text-indigo-700' :
-                              'bg-amber-100 text-amber-700'
+                            <span className={`px-2.5 py-1 rounded-full font-extrabold uppercase tracking-widest text-[9px] ${
+                              e.status === 'pending' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' :
+                              e.status === 'accepted' ? 'bg-blue-100 text-blue-800 border border-blue-200' :
+                              e.status === 'runner_en_route' ? 'bg-sky-100 text-sky-800 border border-sky-200' :
+                              e.status === 'item_picked_up' ? 'bg-purple-100 text-purple-800 border border-purple-200' :
+                              e.status === 'in_transit' ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' :
+                              e.status === 'delivered' ? 'bg-amber-150 text-amber-900 border border-amber-250' :
+                              e.status === 'awaiting_otp' ? 'bg-amber-100 text-amber-800 border border-amber-300 animate-pulse' :
+                              e.status === 'completed' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' :
+                              e.status === 'disputed' ? 'bg-rose-100 text-rose-800 border border-rose-200 font-black' :
+                              'bg-teal-100 text-teal-800 border border-teal-200'
                             }`}>
-                              🟢 {e.status === 'posted' ? 'Waiting' : e.status === 'assigned' ? 'Assigned' : 'In Transit'}
+                              {e.status === 'pending' ? '🛡️ Unfunded' :
+                               e.status === 'accepted' ? '🤝 Accepted' :
+                               e.status === 'runner_en_route' ? '🚲 En Route' :
+                               e.status === 'item_picked_up' ? '📦 Picked Up' :
+                               e.status === 'in_transit' ? '🛣️ In Transit' :
+                               e.status === 'delivered' ? '📍 Arrived' :
+                               e.status === 'awaiting_otp' ? '🔑 Awaiting PIN' :
+                               e.status === 'completed' ? '✓ Completed' :
+                               e.status === 'disputed' ? '⚠️ Disputed' :
+                               '⚖️ Resolved'}
                             </span>
                             <span className="text-on-surface-variant font-mono text-[10px]">
-                              {e.runnerName ? 'Runner: active' : 'Seeking runner'}
+                              {e.runnerName ? `${e.runnerName}` : 'Seeking runner'}
                             </span>
                           </div>
                         </button>
@@ -419,7 +467,7 @@ export default function CustomerDashboard() {
                     {/* Status tracker */}
                     <div className="flex items-center justify-between border-b border-surface-container-high pb-4">
                       <div>
-                        <h3 className="font-extrabold text-sm text-[#0b1c30] line-clamp-1">
+                        <h3 className="font-extrabold text-[#0b1c30] text-sm line-clamp-1">
                           {selectedErrand.title}
                         </h3>
                         <p className="text-xs text-on-surface-variant font-medium mt-0.5 flex items-center gap-1">
@@ -427,56 +475,246 @@ export default function CustomerDashboard() {
                         </p>
                       </div>
 
-                      <button
-                        onClick={() => cancelErrand(selectedErrand.id)}
-                        className="text-xs font-bold text-red-600 hover:text-red-800 flex items-center gap-1 px-2.5 py-1.5 bg-red-50 hover:bg-red-100 rounded-lg cursor-pointer transition-colors"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" /> Cancel Job
-                      </button>
-                    </div>
-
-                    {/* Stepper Progress Nodes */}
-                    <div className="px-2">
-                      <div className="flex justify-between items-center relative">
-                        {/* Connecting Line */}
-                        <div className="absolute left-4 right-4 h-0.5 bg-surface-container-high top-1/2 -translate-y-1/2 z-0"></div>
-                        <div className={`absolute left-4 h-0.5 bg-primary top-1/2 -translate-y-1/2 z-0 transition-all duration-500`} style={{
-                          width: selectedErrand.status === 'posted' ? '0%' :
-                                 selectedErrand.status === 'assigned' ? '33%' :
-                                 selectedErrand.status === 'in_progress' ? '66%' : '100%'
-                        }}></div>
-
-                        {/* Nodes */}
-                        {[
-                          { key: 'posted', label: 'Requested' },
-                          { key: 'assigned', label: 'Matched' },
-                          { key: 'in_progress', label: 'In Transit' },
-                          { key: 'completed', label: 'Arrived' }
-                        ].map((node, idx) => {
-                          const statesOrder = ['posted', 'assigned', 'in_progress', 'completed'];
-                          const currentIdx = statesOrder.indexOf(selectedErrand.status);
-                          const isDone = currentIdx >= idx;
-                          const isCurrent = currentIdx === idx;
-
-                          return (
-                            <div key={node.key} className="flex flex-col items-center z-10 relative">
-                              <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs transition-colors duration-300 ${
-                                isDone 
-                                  ? 'bg-primary text-white border-2 border-primary' 
-                                  : 'bg-surface-container-lowest border-2 border-surface-container-high text-on-surface-variant'
-                              }`}>
-                                {isDone && !isCurrent ? '✓' : idx + 1}
-                              </div>
-                              <span className={`text-[10px] sm:text-xs tracking-tight font-extrabold mt-1.5 ${
-                                isCurrent ? 'text-primary' : isDone ? 'text-on-surface' : 'text-on-surface-variant'
-                              }`}>
-                                {node.label}
-                              </span>
-                            </div>
-                          );
-                        })}
+                      <div className="flex gap-2">
+                        {selectedErrand.isFunded && selectedErrand.status !== 'completed' && selectedErrand.status !== 'disputed' && selectedErrand.status !== 'resolved' && (
+                          <button
+                            onClick={() => setShowDisputeForm(!showDisputeForm)}
+                            className="text-xs font-bold text-amber-700 hover:text-amber-900 flex items-center gap-1 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 rounded-lg cursor-pointer transition-colors border border-amber-200"
+                          >
+                            ⚠️ Raise Dispute
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            cancelErrand(selectedErrand.id);
+                          }}
+                          className="text-xs font-bold text-red-600 hover:text-red-800 flex items-center gap-1 px-2.5 py-1.5 bg-red-50 hover:bg-red-100 rounded-lg cursor-pointer transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> Cancel Job
+                        </button>
                       </div>
                     </div>
+
+                    {/* Dispute filing Form overlay */}
+                    {showDisputeForm && (
+                      <div className="bg-red-50 border border-red-200 p-4 rounded-2xl space-y-3">
+                        <h4 className="text-xs font-black text-red-950 uppercase tracking-wider flex items-center gap-1">
+                          ⚖️ File Escrow Dispute Form
+                        </h4>
+                        <div className="space-y-2">
+                          <label className="block text-[11px] font-bold text-red-800">Select Issue Reason</label>
+                          <select
+                            value={disputeReasonSelection}
+                            onChange={(e) => setDisputeReasonSelection(e.target.value)}
+                            className="w-full h-9 px-3 bg-white border border-red-200 rounded-xl text-xs text-on-surface focus:outline-none"
+                          >
+                            <option value="Wrong Item Delivered">Wrong Item Delivered</option>
+                            <option value="Items Damaged/Broken">Items Damaged/Broken</option>
+                            <option value="Runner Unresponsive/Not Arrived">Runner Unresponsive/Not Arrived</option>
+                            <option value="Incorrect Charge amount">Incorrect Charge amount</option>
+                            <option value="Other complaints">Other complaints</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="block text-[11px] font-bold text-red-800">Dispute Statement Description</label>
+                          <textarea
+                            value={disputeNotes}
+                            onChange={(e) => setDisputeNotes(e.target.value)}
+                            rows={2}
+                            placeholder="Please describe what transpired..."
+                            className="w-full text-xs p-3 bg-white border border-red-200 rounded-xl text-on-surface focus:outline-none"
+                          />
+                        </div>
+                        <div className="flex justify-end gap-2 text-xs font-bold">
+                          <button
+                            type="button"
+                            onClick={() => setShowDisputeForm(false)}
+                            className="px-3 py-1.5 rounded-lg border border-red-200 text-red-800 hover:bg-white"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              raiseDispute(selectedErrand.id, disputeReasonSelection, disputeNotes);
+                              setShowDisputeForm(false);
+                            }}
+                            className="px-3.5 py-1.5 rounded-lg bg-red-700 text-white hover:bg-red-800 shadow-sm"
+                          >
+                            Submit Escalation
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Disputes Panel Alert message */}
+                    {selectedErrand.status === 'disputed' && (
+                      <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl space-y-2">
+                        <h4 className="text-xs font-black text-rose-950 uppercase tracking-wider flex items-center gap-1.5">
+                          ⚠️ ESCROW FUNDS INTERCEPTED & FROZEN
+                        </h4>
+                        <p className="text-[11px] text-rose-900 leading-relaxed font-semibold">
+                          Reason filed: [{selectedErrand.disputeReason}]<br />
+                          Statement: "{selectedErrand.disputeNotes || 'No notes left'}"
+                        </p>
+                        <p className="text-[10px] text-rose-850 bg-white/50 p-2 rounded-lg border border-rose-250 leading-relaxed font-medium">
+                          Our specialist arbitration squad is analyzing GPS traces, courier photos, and conversation sheets. Payout remains securely locked until verdict.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Escrow Checkout Form Screen if not initially funded */}
+                    {!selectedErrand.isFunded ? (
+                      <div className="space-y-4 py-2 border-b border-surface-container-high pb-4">
+                        <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 flex gap-3">
+                          <span className="text-xl">🛡️</span>
+                          <div>
+                            <h4 className="text-xs font-extrabold text-amber-950 uppercase tracking-widest">Fintech Escrow Verification Required</h4>
+                            <p className="text-[11px] text-amber-900 mt-1 leading-relaxed font-semibold">
+                              To broadcast this errand to community courier riders and secure delivery integrity, your logistics payout + service fee must be deposited upfront.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Cost breakdown */}
+                        <div className="bg-surface p-4 rounded-xl border border-surface-container space-y-2.5">
+                          <span className="text-xs font-black text-on-surface uppercase tracking-wider">Secured Outflow Valuation</span>
+                          <div className="space-y-2 text-xs text-on-surface-variant font-medium">
+                            <div className="flex justify-between">
+                              <span>Runner Logistics Bounty:</span>
+                              <span className="text-on-surface font-extrabold">£{selectedErrand.payout.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>ErrandLink Service Fee:</span>
+                              <span className="text-on-surface font-extrabold">£{selectedErrand.platformFee?.toFixed(2) || '1.50'}</span>
+                            </div>
+                            <div className="h-[1px] bg-surface-container-high my-1.5" />
+                            <div className="flex justify-between text-sm font-black text-[#0b1c30]">
+                              <span>Total Escrow Outflow:</span>
+                              <span className="text-[#006c49]">£{selectedErrand.totalEscrowAmount?.toFixed(2) || (selectedErrand.payout + 1.50).toFixed(2)}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Choose payment route</label>
+                          <div className="grid grid-cols-3 gap-2">
+                            {[
+                              { key: 'wallet', label: 'My Wallet', icon: '📥' },
+                              { key: 'card', label: 'Debit Card', icon: '💳' },
+                              { key: 'bank', label: 'Bank Hub', icon: '🏛️' }
+                            ].map(pay => (
+                              <button
+                                key={pay.key}
+                                type="button"
+                                onClick={() => {
+                                  const res = fundAndPublishErrand(selectedErrand.id, pay.key as any);
+                                  if (res && !res.success) {
+                                    alert(res.error);
+                                  } else {
+                                    alert("✓ Security Escrow deposit secured successfully! Errand published to runner feed.");
+                                  }
+                                }}
+                                className="p-3 bg-surface-container hover:bg-surface border border-surface-container hover:border-primary/40 rounded-xl flex flex-col items-center justify-center gap-1.5 cursor-pointer text-center group transition-all"
+                              >
+                                <span className="text-lg group-hover:scale-110 duration-200">{pay.icon}</span>
+                                <span className="text-[10px] font-black text-on-surface truncate w-full">{pay.label}</span>
+                              </button>
+                            ))}
+                          </div>
+                          <span className="text-[10px] text-emerald-800 font-bold bg-emerald-50 py-1 rounded-lg text-center flex items-center justify-center gap-1 mt-2">
+                            🔒 PCI-DSS Compliant Secure Escrow Channel active
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Stepper Progress Nodes for Funded Errand */}
+                        <div className="px-2">
+                          <div className="flex justify-between items-center relative">
+                            {/* Connecting Line */}
+                            <div className="absolute left-4 right-4 h-0.5 bg-surface-container-high top-1/2 -translate-y-1/2 z-0"></div>
+                            <div className={`absolute left-4 h-0.5 bg-[#006c49] top-1/2 -translate-y-1/2 z-0 transition-all duration-500`} style={{
+                              width: selectedErrand.status === 'pending' ? '0%' :
+                                     selectedErrand.status === 'accepted' ? '25%' :
+                                     (selectedErrand.status === 'runner_en_route' || selectedErrand.status === 'item_picked_up') ? '50%' :
+                                     (selectedErrand.status === 'in_transit' || selectedErrand.status === 'delivered') ? '75%' : '100%'
+                            }}></div>
+
+                            {/* Nodes */}
+                            {[
+                              { label: 'Secured' },
+                              { label: 'Accepted' },
+                              { label: 'Transit' },
+                              { label: 'Delivered' },
+                              { label: 'Verified' }
+                            ].map((node, idx) => {
+                              const statesOrder = ['pending', 'accepted', 'runner_en_route', 'item_picked_up', 'in_transit', 'delivered', 'awaiting_otp', 'completed', 'resolved'];
+                              
+                              let currentIdx = 0;
+                              if (selectedErrand.status === 'pending') currentIdx = 0;
+                              else if (selectedErrand.status === 'accepted') currentIdx = 1;
+                              else if (selectedErrand.status === 'runner_en_route' || selectedErrand.status === 'item_picked_up') currentIdx = 2;
+                              else if (selectedErrand.status === 'in_transit' || selectedErrand.status === 'delivered' || selectedErrand.status === 'awaiting_otp') currentIdx = 3;
+                              else if (selectedErrand.status === 'completed' || selectedErrand.status === 'resolved') currentIdx = 4;
+
+                              const isDone = currentIdx >= idx;
+                              const isCurrent = currentIdx === idx;
+
+                              return (
+                                <div key={idx} className="flex flex-col items-center z-10 relative">
+                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs transition-all duration-300 ${
+                                    isDone 
+                                      ? 'bg-emerald-600 text-white border-2 border-emerald-600 shadow-sm' 
+                                      : 'bg-surface-container-lowest border-2 border-surface-container-high text-on-surface-variant'
+                                  }`}>
+                                    {isDone && !isCurrent ? '✓' : idx + 1}
+                                  </div>
+                                  <span className={`text-[10px] sm:text-xs tracking-tight font-extrabold mt-1.5 ${
+                                    isCurrent ? 'text-emerald-700' : isDone ? 'text-on-surface' : 'text-on-surface-variant'
+                                  }`}>
+                                    {node.label}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* OTP visual card displays */}
+                        {selectedErrand.status === 'awaiting_otp' && (
+                          <div className="bg-emerald-50 border border-emerald-100 rounded-3xl p-5 space-y-4">
+                            <div className="flex gap-3">
+                              <span className="text-xl">🤝</span>
+                              <div>
+                                <h4 className="text-xs font-black text-emerald-950 uppercase tracking-wider">Awaiting Secure Verification Handshake</h4>
+                                <p className="text-[11px] text-emerald-900 leading-relaxed mt-0.5 font-semibold">
+                                  The package has been deposited at destination. Provide this code below to your runner ONLY after you physically receive and inspect the order to release escrow hold balance.
+                                </p>
+                              </div>
+                            </div>
+                            
+                            <div className="bg-emerald-700/10 flex flex-col items-center justify-center py-4 rounded-2xl border border-emerald-600/10">
+                              <span className="text-[10px] uppercase tracking-widest font-extrabold text-emerald-800">Runner release Verification PIN</span>
+                              <span className="text-2xl font-black font-mono tracking-widest text-emerald-950 mt-1.5">{selectedErrand.deliveryPin}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Photo proof display */}
+                        {selectedErrand.deliveryPhoto && (
+                          <div className="bg-surface p-4 rounded-2xl border border-surface-container space-y-2">
+                            <span className="text-[10px] font-black uppercase text-on-surface-variant tracking-wider block">📸 Delivery Courier Proof Upload</span>
+                            <div className="w-full h-44 rounded-xl overflow-hidden border border-surface-container-high bg-surface-container">
+                              <img src={selectedErrand.deliveryPhoto} className="w-full h-full object-cover" alt="Delivery Proof" loading="lazy" />
+                            </div>
+                            <p className="text-[11px] text-on-surface-variant leading-relaxed italic">
+                              "{selectedErrand.deliveryNotes || 'No delivery notes uploaded.'}"
+                            </p>
+                          </div>
+                        )}
+                      </>
+                    )}
 
                     {/* Description Checklist */}
                     <div>
@@ -489,10 +727,10 @@ export default function CustomerDashboard() {
                             <input
                               type="checkbox"
                               readOnly
-                              checked={selectedErrand.status === 'completed'}
+                              checked={selectedErrand.status === 'completed' || selectedErrand.status === 'resolved'}
                               className="w-4 h-4 text-primary rounded border-surface-container-high"
                             />
-                            <span className={selectedErrand.status === 'completed' ? 'line-through text-outline' : 'text-on-surface'}>
+                            <span className={selectedErrand.status === 'completed' || selectedErrand.status === 'resolved' ? 'line-through text-outline' : 'text-on-surface'}>
                               {it}
                             </span>
                           </div>
@@ -501,25 +739,31 @@ export default function CustomerDashboard() {
                     </div>
 
                     {/* Simulator Action Panel inside track */}
-                    {selectedErrand.status !== 'completed' && (
+                    {selectedErrand.status !== 'completed' && selectedErrand.status !== 'disputed' && selectedErrand.status !== 'resolved' && (
                       <div className="p-4 bg-orange-50 border border-orange-100 rounded-2xl">
                         <div className="flex items-center justify-between">
                           <div>
-                            <span className="text-[10px] font-black uppercase text-orange-800 tracking-wider">
+                            <span className="text-[10px] font-black uppercase text-orange-980 tracking-wider">
                               Simulation Sandbox
                             </span>
-                            <p className="text-xs text-on-surface-variant mt-0.5">
-                              {selectedErrand.status === 'posted' ? 'No runner yet. Click to claim!' :
-                               selectedErrand.status === 'assigned' ? 'Runner accepted. Click to launch!' :
-                               'Runner driving. Click to finalize delivery!'}
+                            <p className="text-xs text-on-surface-variant mt-0.5 font-medium">
+                              {!selectedErrand.isFunded ? 'Checkout first to broadcast.' :
+                               selectedErrand.status === 'pending' ? 'Funded! Click simulator to claim job.' :
+                               selectedErrand.status === 'accepted' ? 'Claimed. Click to move en route.' :
+                               selectedErrand.status === 'runner_en_route' ? 'In route. Click to collect package.' :
+                               selectedErrand.status === 'item_picked_up' ? 'Picked up. Click to move in transit.' :
+                               selectedErrand.status === 'in_transit' ? 'Transit. Click to complete dispatch dropsite.' :
+                               'Delivered proof. Enter OTP verification below to payout.'}
                             </p>
                           </div>
-                          <button
-                            onClick={() => simulateRunnerActivity(selectedErrand.id)}
-                            className="bg-orange-600 hover:bg-orange-700 text-white font-extrabold text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-colors"
-                          >
-                            <RefreshCw className="w-3.5 h-3.5" /> Simulate Step
-                          </button>
+                          {selectedErrand.isFunded && (
+                            <button
+                              onClick={() => simulateRunnerActivity(selectedErrand.id)}
+                              className="bg-orange-600 hover:bg-orange-700 text-white font-extrabold text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-colors"
+                            >
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Simulate Step
+                            </button>
+                          )}
                         </div>
                       </div>
                     )}
@@ -681,6 +925,127 @@ export default function CustomerDashboard() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {activeCustomerTab === 'wallet' && (
+            <div className="space-y-6">
+              {/* Balance Summary Card */}
+              <div className="bg-gradient-to-r from-[#006c49] to-teal-700 rounded-3xl p-6 text-white shadow-md relative overflow-hidden">
+                <div className="absolute right-0 top-0 bottom-0 w-32 bg-white/5 skew-x-12 translate-x-10 pointer-events-none"></div>
+                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold tracking-widest text-[#d8f8ed] block">Available simulated Balance</span>
+                    <span className="text-3xl font-black tracking-tight block mt-1.5">£{currentUser?.balance.toFixed(2)}</span>
+                    <span className="text-xs text-[#d8f8ed]/80 block mt-1 font-medium">✓ Protected under ErrandLink Smart-Escrow Protocol</span>
+                  </div>
+
+                  <div className="flex gap-2 bg-white/10 p-2 rounded-2xl border border-white/10 items-center">
+                    <span className="text-sm font-bold flex items-center pl-2">£</span>
+                    <input
+                      type="number"
+                      min="10"
+                      max="5000"
+                      required
+                      value={topupAmount}
+                      onChange={(e) => setTopupAmount(e.target.value)}
+                      className="bg-transparent text-white font-black text-sm w-20 focus:outline-none placeholder-emerald-250 border-none outline-none"
+                      placeholder="Amount"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const amt = parseFloat(topupAmount);
+                        if (isNaN(amt) || amt <= 0) return;
+                        fundCustomerWallet(amt);
+                        setTopupAmount('50');
+                        alert(`✓ Simulated top-up of £${amt.toFixed(2)} successful!`);
+                      }}
+                      className="bg-white text-[#006c49] font-extrabold text-xs px-4 py-2 rounded-xl border-none hover:bg-emerald-50 active:scale-95 duration-200 cursor-pointer shadow-sm"
+                    >
+                      Fund Wallet
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Transaction list */}
+              <div className="bg-surface-container-lowest p-6 rounded-3xl border border-surface-container shadow-sm space-y-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-surface-container-high pb-4">
+                  <div>
+                    <h3 className="text-base font-black text-[#0b1c30]">Escrow Transactions</h3>
+                    <p className="text-xs text-on-surface-variant font-medium mt-0.5">Wallet flow and security locks history</p>
+                  </div>
+
+                  {/* Filters */}
+                  <div className="flex gap-1 flex-wrap">
+                    {[
+                      { key: 'all', label: 'All Traces' },
+                      { key: 'escrow', label: 'Held Escrow' },
+                      { key: 'fund', label: 'Topups' },
+                      { key: 'refund', label: 'Refunds' }
+                    ].map(f => (
+                      <button
+                        key={f.key}
+                        onClick={() => setWalletFilterType(f.key as any)}
+                        className={`px-2.5 py-1 text-[10px] uppercase tracking-wider font-extrabold rounded-lg border cursor-pointer transition-all ${
+                          walletFilterType === f.key
+                            ? 'bg-[#006c49] text-white border-[#006c49]'
+                            : 'border-surface-container hover:bg-surface shadow-sm text-on-surface-variant'
+                        }`}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {(() => {
+                  const myTxs = transactions.filter(t => t.userId === currentUser?.id);
+                  const filteredTxs = myTxs.filter(t => {
+                    if (walletFilterType === 'all') return true;
+                    if (walletFilterType === 'escrow') return t.category === 'escrow_hold';
+                    if (walletFilterType === 'fund') return t.category === 'wallet_fund';
+                    if (walletFilterType === 'refund') return t.category === 'refund';
+                    return true;
+                  });
+
+                  if (filteredTxs.length === 0) {
+                    return <p className="text-xs text-on-surface-variant text-center py-6 font-medium">No recorded transactions meet this parameter filter.</p>;
+                  }
+
+                  return (
+                    <div className="space-y-2">
+                      {filteredTxs.map(t => {
+                        const isDeb = t.type === 'debit';
+                        return (
+                          <div key={t.id} className="p-3.5 bg-surface border border-surface-container rounded-xl flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${
+                                t.category === 'escrow_hold' ? 'bg-amber-100 text-amber-850' :
+                                t.category === 'refund' ? 'bg-indigo-100 text-indigo-800' :
+                                'bg-emerald-100 text-emerald-900'
+                              }`}>
+                                {t.category === 'escrow_hold' ? '🔑' : t.category === 'refund' ? '⚖️' : '📥'}
+                              </div>
+                              <div>
+                                <span className="text-xs font-bold text-on-surface block">{t.title}</span>
+                                <span className="text-[10px] font-mono text-outline leading-none mt-0.5 block">
+                                  {new Date(t.timestamp).toLocaleString()}
+                                </span>
+                              </div>
+                            </div>
+
+                            <span className={`text-xs font-black font-mono shrink-0 whitespace-nowrap ${isDeb ? 'text-red-700' : 'text-emerald-700'}`}>
+                              {isDeb ? '-' : '+'} £{t.amount.toFixed(2)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
           )}
         </div>

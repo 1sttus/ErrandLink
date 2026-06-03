@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStore } from '../context/StateContext';
 import { 
   Store, Shield, Briefcase, Plus, TrendingUp, Sparkles, LogIn, UserPlus,
-  MapPin, Clock, Search, Coffee, ArrowUpRight, HelpCircle, Package, AlertCircle, Eye, LogOut
+  MapPin, Clock, Search, Coffee, ArrowUpRight, HelpCircle, Package, AlertCircle, Eye, LogOut, Menu, ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { UserRole } from '../types';
@@ -12,16 +12,23 @@ export default function GuestDashboard() {
     errands, 
     products, 
     setView, 
-    selectRoleForOnboarding 
+    selectRoleForOnboarding,
+    logVisitorActivity
   } = useStore();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'runners' | 'goods'>('runners');
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   
   // Interactive account prompt state
   const [showPrompt, setShowPrompt] = useState(false);
   const [promptMessage, setPromptMessage] = useState('');
   const [selectedRole, setSelectedRole] = useState<UserRole>('customer');
+
+  // Log on initial render
+  useEffect(() => {
+    logVisitorActivity('Anonymous Guest', 'Visited ErrandLink homepage', 'guest');
+  }, []);
 
   const filteredErrands = errands.filter(e => 
     e.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -34,17 +41,20 @@ export default function GuestDashboard() {
   );
 
   const triggerActionPrompt = (message: string, initialRole: UserRole = 'customer') => {
+    logVisitorActivity('Anonymous Guest', `Triggered authentication signup prompt: "${message.substring(0, 32)}..."`, 'guest');
     setPromptMessage(message);
     setSelectedRole(initialRole);
     setShowPrompt(true);
   };
 
   const handleRegisterRedirect = (role: UserRole) => {
+    logVisitorActivity('Anonymous Guest', `Chose registration role: "${role}"`, 'guest');
     selectRoleForOnboarding(role);
     setView('signup');
   };
 
   const handleLoginRedirect = () => {
+    logVisitorActivity('Anonymous Guest', 'Clicked "Log In to Account"', 'guest');
     setView('login');
   };
 
@@ -52,39 +62,87 @@ export default function GuestDashboard() {
     <div className="w-full min-h-screen bg-transparent flex flex-col pt-0 pb-16">
       
       {/* Top Glass Navbar */}
-      <div className="w-full bg-white/[0.02] backdrop-blur-md border-b border-white/10 sticky top-0 z-20 shadow-sm px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="w-full bg-white/[0.03] backdrop-blur-md border-b border-white/10 sticky top-0 z-30 shadow-md px-6 py-4 flex items-center justify-between">
+        {/* Left Corner logo brand */}
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-400 to-indigo-600"></div>
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-400 to-indigo-600 shadow-lg shadow-cyan-500/20"></div>
           <div>
-            <span className="font-bold text-lg tracking-tight text-white block">ERRANDLINK</span>
+            <span className="font-extrabold text-base sm:text-lg tracking-tight text-white block">ERRANDLINK</span>
             <span className="text-[10px] text-cyan-400 font-bold uppercase tracking-wider block">sandbox guest explorer</span>
           </div>
         </div>
 
-        {/* Global CTAs */}
-        <div className="flex items-center gap-3 flex-wrap justify-center">
+        {/* Right Corner Menu Dropdown */}
+        <div className="relative">
           <button
-            onClick={() => triggerActionPrompt('Create an account to post a custom errand or search active routes!')}
-            className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-cyan-500 hover:to-cyan-600 duration-200 text-xs font-bold text-white rounded-xl flex items-center gap-1.5 cursor-pointer shadow-lg"
+            onClick={() => setDropdownOpen(!dropdownOpen)}
+            className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 active:scale-95 duration-200 text-xs font-bold text-white rounded-xl border border-indigo-400/20 flex items-center gap-1.5 cursor-pointer shadow-lg select-none transition-all"
+            aria-expanded={dropdownOpen}
           >
-            <Plus className="w-3.5 h-3.5" /> Post an Errand
-          </button>
-          
-          <div className="h-4 w-[1px] bg-white/10 hidden sm:block"></div>
-
-          <button
-            onClick={handleLoginRedirect}
-            className="px-4 py-2 bg-white/5 hover:bg-white/10 text-xs font-bold text-white border border-white/10 rounded-xl flex items-center gap-1 cursor-pointer transition-colors"
-          >
-            <LogIn className="w-3.5 h-3.5" /> Log In
+            <Menu className="w-4 h-4 shrink-0" />
+            <span className="hidden sm:inline">Options Menu</span>
+            <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${dropdownOpen ? 'rotate-180' : ''}`} />
           </button>
 
-          <button
-            onClick={() => triggerActionPrompt('Choose your preferred role and start trading assets immediately!')}
-            className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-indigo-500 hover:opacity-90 duration-200 text-xs font-bold text-white rounded-xl flex items-center gap-1 cursor-pointer"
-          >
-            <UserPlus className="w-3.5 h-3.5" /> Create Account
-          </button>
+          {/* Actual Dropdown List overlay and cards */}
+          <AnimatePresence>
+            {dropdownOpen && (
+              <>
+                {/* Invisible backdrop click catcher to dismiss the dropdown */}
+                <div 
+                  className="fixed inset-0 z-30" 
+                  onClick={() => setDropdownOpen(false)}
+                />
+                
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 8 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 8 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute right-0 mt-2.5 w-60 bg-slate-900 border border-white/15 rounded-2xl p-2 shadow-2xl z-40 backdrop-blur-xl text-left"
+                >
+                  <div className="px-3 py-1.5 border-b border-white/5 mb-1 text-[10px] uppercase font-black tracking-wider text-cyan-400">
+                    Fast Portal Hub
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setDropdownOpen(false);
+                      triggerActionPrompt('Create an account to post a custom errand or search active routes!');
+                    }}
+                    className="w-full text-left px-3 py-2.5 hover:bg-white/5 rounded-xl text-xs font-bold text-gray-200 hover:text-white flex items-center gap-2.5 cursor-pointer transition-colors"
+                  >
+                    <Plus className="w-4 h-4 text-indigo-400 shrink-0" />
+                    <span className="flex-1">Post an Errand</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setDropdownOpen(false);
+                      triggerActionPrompt('Choose your preferred role and start trading assets immediately!');
+                    }}
+                    className="w-full text-left px-3 py-2.5 hover:bg-white/5 rounded-xl text-xs font-bold text-gray-200 hover:text-white flex items-center gap-2.5 cursor-pointer transition-colors"
+                  >
+                    <UserPlus className="w-4 h-4 text-cyan-400 shrink-0" />
+                    <span className="flex-1">Create Account</span>
+                  </button>
+
+                  <div className="h-[1px] bg-white/5 my-1.5" />
+
+                  <button
+                    onClick={() => {
+                      setDropdownOpen(false);
+                      handleLoginRedirect();
+                    }}
+                    className="w-full text-left px-3 py-2.5 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:opacity-90 rounded-xl text-xs font-black text-white flex items-center justify-center gap-2 cursor-pointer transition-all shadow-md"
+                  >
+                    <LogIn className="w-4 h-4 shrink-0" />
+                    <span>Log In to Account</span>
+                  </button>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
@@ -112,7 +170,13 @@ export default function GuestDashboard() {
               <input
                 type="text"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSearchQuery(val);
+                  if (val.trim().length > 2) {
+                    logVisitorActivity('Anonymous Guest', `Searched for: "${val}"`, 'guest');
+                  }
+                }}
                 placeholder="Search active runs, bakeries, or green juices..."
                 className="bg-transparent border-none text-xs outline-none w-full text-white placeholder-white/35"
               />
@@ -127,7 +191,10 @@ export default function GuestDashboard() {
         {/* Toggle tabs to switch view of discover */}
         <div className="flex items-center justify-center gap-3 mb-8">
           <button
-            onClick={() => setActiveTab('runners')}
+            onClick={() => {
+              setActiveTab('runners');
+              logVisitorActivity('Anonymous Guest', 'Browsed active runner errand list', 'guest');
+            }}
             className={`px-5 py-2.5 rounded-full text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
               activeTab === 'runners'
                 ? 'bg-gradient-to-r from-indigo-500/20 to-indigo-600/35 border border-indigo-500 text-indigo-300 shadow-md'
@@ -138,7 +205,10 @@ export default function GuestDashboard() {
           </button>
           
           <button
-            onClick={() => setActiveTab('goods')}
+            onClick={() => {
+              setActiveTab('goods');
+              logVisitorActivity('Anonymous Guest', 'Browsed vendor bakery store page', 'guest');
+            }}
             className={`px-5 py-2.5 rounded-full text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
               activeTab === 'goods'
                 ? 'bg-gradient-to-r from-[#00ffd5]/10 to-[#00adb5]/25 border border-cyan-400 text-cyan-300 shadow-md'
@@ -201,7 +271,10 @@ export default function GuestDashboard() {
 
                       {/* Request CTA Trigger */}
                       <button
-                        onClick={() => triggerActionPrompt('Book this runner or create a custom errand pick up request!', 'customer')}
+                        onClick={() => {
+                          logVisitorActivity('Anonymous Guest', `Interested in Errand: "${e.title}"`, 'guest');
+                          triggerActionPrompt('Book this runner or create a custom errand pick up request!', 'customer');
+                        }}
                         className="w-full py-2 bg-white/5 group-hover:bg-indigo-600 group-hover:text-white border border-white/10 group-hover:border-indigo-500 duration-250 rounded-xl text-[10px] font-black uppercase tracking-wider text-indigo-300 flex items-center justify-center gap-1 cursor-pointer"
                       >
                         Claim Transit Runner / Book Errand <ArrowUpRight className="w-3.5 h-3.5" />
@@ -342,6 +415,7 @@ export default function GuestDashboard() {
                       {/* Buy trigger CTA */}
                       <button
                         onClick={() => {
+                          logVisitorActivity('Anonymous Guest', `Attempted purchase & courier for: "${p.name}"`, 'guest');
                           if (isUnavailable) {
                             triggerActionPrompt('This service/item is currently unavailable. Contact the merchant by joining!');
                           } else {
@@ -351,7 +425,7 @@ export default function GuestDashboard() {
                         disabled={isUnavailable}
                         className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors cursor-pointer ${
                           isUnavailable 
-                            ? 'bg-white/5 border border-white/5 text-gray-500 cursor-not-allowed'
+                            ? 'bg-white/5 border border-white/5 text-gray-400 cursor-not-allowed'
                             : 'bg-cyan-500 hover:bg-[#00ffd5] text-black hover:text-black shadow-md'
                         }`}
                       >

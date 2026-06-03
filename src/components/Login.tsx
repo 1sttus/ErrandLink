@@ -33,6 +33,12 @@ export default function Login() {
       name: 'London Artisan Bakery',
       email: 'bakes@artisanbakery.co.uk',
       desc: 'Simulate Vendor (Manage stock, dispatch couriers)'
+    },
+    {
+      role: 'admin',
+      name: 'ErrandLink Admin Specialist',
+      email: 'admin@errandlink.com',
+      desc: 'Simulate Admin (Review platform statistics, resolve disputes)'
     }
   ];
 
@@ -68,8 +74,8 @@ export default function Login() {
             <label className="block text-xs font-semibold uppercase tracking-wider text-on-surface-variant mb-2">
               Select Login Role
             </label>
-            <div className="grid grid-cols-3 gap-2">
-              {(['customer', 'runner', 'vendor'] as UserRole[]).map((r) => (
+            <div className="grid grid-cols-4 gap-1.5">
+              {(['customer', 'runner', 'vendor', 'admin'] as UserRole[]).map((r) => (
                 <button
                   key={r}
                   type="button"
@@ -77,7 +83,7 @@ export default function Login() {
                     setRole(r);
                     selectRoleForOnboarding(r);
                   }}
-                  className={`py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                  className={`py-2 text-[10px] font-bold rounded-xl border transition-all cursor-pointer ${
                     role === r
                       ? 'border-primary bg-surface-container text-primary shadow-sm'
                       : 'border-surface-container hover:bg-surface-container-low text-on-surface-variant'

@@ -9,7 +9,7 @@ import { motion } from 'motion/react';
 import { 
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid 
 } from 'recharts';
-import { Errand, UserRole } from '../types';
+import { Errand, UserRole, ErrandStatus } from '../types';
 
 export default function RunnerDashboard() {
   const {
@@ -20,23 +20,39 @@ export default function RunnerDashboard() {
     setRunnerTab,
     acceptErrand,
     advanceErrandStatus,
+    submitDeliveryProof,
+    verifyDeliveryOTP,
+    withdrawRunnerEarnings,
     setSelectedErrandId,
     sendMessage,
     switchActiveRole,
     logoutUser,
-    setView
+    setView,
+    logVisitorActivity
   } = useStore();
 
   const [chatMessage, setChatMessage] = useState('');
+
+  // Delivery proof submission states
+  const [showProofForm, setShowProofForm] = useState(false);
+  const [proofPhoto, setProofPhoto] = useState('https://images.unsplash.com/photo-1539627831859-a911cf04d3cd?auto=format&fit=crop&w=400&q=80'); // stock parcel boxes
+  const [proofNotes, setProofNotes] = useState('');
+
+  // Handshake pin input state
+  const [otpInput, setOtpInput] = useState('');
+  const [otpError, setOtpError] = useState('');
+
+  // Bank withdrawal form state
+  const [withdrawAmount, setWithdrawAmount] = useState('25');
 
   // Available jobs (posted, no runner assigned yet)
   const availableErrands = errands.filter(e => e.status === 'posted');
   
   // Claimed/active jobs assigned to this runner
-  const activeErrands = errands.filter(e => e.runnerId === currentUser?.id && e.status !== 'completed');
+  const activeErrands = errands.filter(e => e.runnerId === currentUser?.id && e.status !== 'completed' && e.status !== 'resolved');
   
   // Historical jobs finalized by this runner
-  const completedErrandsByRunner = errands.filter(e => e.runnerId === currentUser?.id && e.status === 'completed');
+  const completedErrandsByRunner = errands.filter(e => e.runnerId === currentUser?.id && (e.status === 'completed' || e.status === 'resolved'));
 
   const selectedErrand = errands.find(e => e.id === selectedErrandId);
 
@@ -53,7 +69,11 @@ export default function RunnerDashboard() {
 
   const handleClaimJob = (errandId: string) => {
     if (!currentUser) return;
+    const err = errands.find(e => e.id === errandId);
     acceptErrand(errandId, currentUser.id, `${currentUser.name} (You)`);
+    if (err) {
+      logVisitorActivity(currentUser.name, `Claimed Errand/Route: "${err.title}"`, 'runner');
+    }
     setRunnerTab('active');
     setSelectedErrandId(errandId);
   };
@@ -138,7 +158,12 @@ export default function RunnerDashboard() {
             </h3>
             <div className="flex flex-col gap-1.5">
               <button
-                onClick={() => setRunnerTab('jobs')}
+                onClick={() => {
+                  setRunnerTab('jobs');
+                  if (currentUser) {
+                    logVisitorActivity(currentUser.name, 'Browsed active dispatch runner jobs list', 'runner');
+                  }
+                }}
                 className={`w-full flex items-center justify-between px-4 py-3 text-sm font-bold rounded-xl transition-all cursor-pointer ${
                   activeRunnerTab === 'jobs'
                     ? 'bg-primary text-on-primary shadow-sm'
@@ -310,9 +335,13 @@ export default function RunnerDashboard() {
                         </span>
 
                         <div className="mt-3 flex items-center justify-between text-[11px]">
-                          <span className="text-on-surface-variant">Client: {e.customerName}</span>
-                          <span className="font-bold text-primary">
-                            {e.status === 'assigned' ? 'Claimed' : 'Driving'}
+                          <span className="text-on-surface-variant font-medium">Client: {e.customerName}</span>
+                          <span className={`font-black uppercase text-[9px] tracking-wider px-2 py-0.5 rounded-md ${
+                            e.status === 'disputed' ? 'bg-red-50 text-red-700 border border-red-100' :
+                            e.status === 'awaiting_otp' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
+                            'bg-primary/5 text-primary'
+                          }`}>
+                            {e.status.replace('_', ' ')}
                           </span>
                         </div>
                       </button>
@@ -366,28 +395,174 @@ export default function RunnerDashboard() {
                     </div>
 
                     {/* Actions button to advance transit state */}
-                    <div className="pt-2">
-                      {selectedErrand.status === 'assigned' && (
+                    <div className="pt-2 space-y-4">
+                      {/* Accepted, not en route */}
+                      {selectedErrand.status === 'accepted' && (
+                        <button
+                          onClick={() => advanceErrandStatus(selectedErrand.id)}
+                          className="w-full h-11 bg-indigo-700 text-white hover:bg-indigo-800 transition-colors font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                        >
+                          <Car className="w-4 h-4 animate-bounce" /> Depart toward Pickup Spot
+                        </button>
+                      )}
+
+                      {/* En route to pickup */}
+                      {selectedErrand.status === 'runner_en_route' && (
+                        <button
+                          onClick={() => advanceErrandStatus(selectedErrand.id)}
+                          className="w-full h-11 bg-amber-600 text-white hover:bg-amber-700 transition-colors font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                        >
+                          📍 Arrive & Collect Errand Package
+                        </button>
+                      )}
+
+                      {/* Package collected */}
+                      {selectedErrand.status === 'item_picked_up' && (
                         <button
                           onClick={() => advanceErrandStatus(selectedErrand.id)}
                           className="w-full h-11 bg-primary text-on-primary hover:bg-primary-container transition-colors font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
                         >
-                          <Car className="w-4 h-4" /> Start Drive / Transit
+                          ⚡ Commence Transit driving to South Kensington drop-off
                         </button>
                       )}
 
-                      {selectedErrand.status === 'in_progress' && (
+                      {/* In Transit - require proof */}
+                      {selectedErrand.status === 'in_transit' && !showProofForm && (
                         <button
-                          onClick={() => advanceErrandStatus(selectedErrand.id)}
-                          className="w-full h-11 bg-secondary text-on-secondary hover:bg-[#005236] transition-colors font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer shadow-sm animate-pulse"
+                          onClick={() => setShowProofForm(true)}
+                          className="w-full h-11 bg-[#006c49] text-white hover:bg-[#005137] transition-all font-black text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
                         >
-                          <CircleCheck className="w-4 h-4" /> Package Delivered securely!
+                          📸 Initiate Doorstep Drop-off & Upload Proof
                         </button>
                       )}
 
-                      {selectedErrand.status === 'completed' && (
-                        <div className="p-4 bg-secondary-container/10 border border-secondary-container/30 rounded-2xl text-center">
-                          <p className="text-xs font-bold text-[#005236]">✓ Errand completed and payout added to wallet!</p>
+                      {/* Delivery photo proof upload simulator card */}
+                      {showProofForm && selectedErrand.status === 'in_transit' && (
+                        <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3.5 text-left">
+                          <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center justify-between">
+                            <span>📸 Dispatch Courier Proof Form</span>
+                            <button onClick={() => setShowProofForm(false)} className="text-slate-400 hover:text-black">✕</button>
+                          </h4>
+
+                          <div className="space-y-1">
+                            <label className="block text-[10px] uppercase font-bold text-slate-650">Verify Parcel Visual Proof</label>
+                            <div className="grid grid-cols-2 gap-2">
+                              {[
+                                { url: 'https://images.unsplash.com/photo-1539627831859-a911cf04d3cd?auto=format&fit=crop&w=300&q=80', label: 'Doorbell Box Drop' },
+                                { url: 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?auto=format&fit=crop&w=300&q=80', label: 'Secure Mailroom Handover' }
+                              ].map((opt) => (
+                                <button
+                                  type="button"
+                                  key={opt.url}
+                                  onClick={() => setProofPhoto(opt.url)}
+                                  className={`p-2 rounded-xl border text-left font-semibold text-[11px] flex items-center gap-2 transition-all ${
+                                    proofPhoto === opt.url ? 'bg-primary/5 text-primary border-primary' : 'bg-white border-slate-200'
+                                  }`}
+                                >
+                                  <img referrerPolicy="no-referrer" src={opt.url} className="w-8 h-8 rounded object-cover" />
+                                  <span>{opt.label}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="block text-[10px] uppercase font-bold text-slate-650">Notes / Instructions</label>
+                            <input
+                              type="text"
+                              value={proofNotes}
+                              onChange={(e) => setProofNotes(e.target.value)}
+                              placeholder="e.g. Left safe behind brown recycling bin"
+                              className="w-full text-xs p-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-primary text-slate-800"
+                            />
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              submitDeliveryProof(selectedErrand.id, proofPhoto, proofNotes || 'Delivered safely.');
+                              setShowProofForm(false);
+                            }}
+                            className="w-full py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-xs rounded-xl shadow-sm transition-colors"
+                          >
+                            Upload Proof & Request Handshake PIN
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Escrow is holding funds, Awaiting OTP PIN handshake */}
+                      {selectedErrand.status === 'awaiting_otp' && (
+                        <div className="p-5 bg-gradient-to-b from-amber-50 to-orange-50 border border-amber-200 rounded-2xl space-y-3.5 text-left shadow-sm">
+                          <div>
+                            <h4 className="text-xs font-black text-amber-950 uppercase tracking-widest flex items-center gap-1.5">
+                              🔐 ESCROW CRYPTO-SHIELD ACTIVE
+                            </h4>
+                            <p className="text-[11px] text-amber-900 mt-1 leading-relaxed font-semibold">
+                              Client payout of <strong>£{selectedErrand.payout.toFixed(2)}</strong> is frozen securely. Request the unique 4-digit verification code from your client at doorstep handover to cash out immediately.
+                            </p>
+                          </div>
+
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              maxLength={4}
+                              placeholder="Enter 4-digit Handshake OTP"
+                              value={otpInput}
+                              onChange={(e) => {
+                                setOtpInput(e.target.value);
+                                setOtpError('');
+                              }}
+                              className="bg-white border border-amber-300 rounded-xl px-3 py-2 text-sm tracking-widest font-black text-center font-mono w-44 uppercase focus:outline-none focus:border-[#006c49]"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const success = verifyDeliveryOTP(selectedErrand.id, otpInput);
+                                if (success) {
+                                  setOtpInput('');
+                                  setOtpError('');
+                                  alert('✓ ESCROW SETTLED: Funds instantly unlocked and added to wallet balance!');
+                                } else {
+                                  setOtpError('❌ INVALID OTP CODE: Decryption handshake mismatch.');
+                                }
+                              }}
+                              className="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-extrabold rounded-xl shadow-sm"
+                            >
+                              Release payment
+                            </button>
+                          </div>
+
+                          {otpError && (
+                            <p className="text-[10px] text-red-700 font-extrabold">{otpError}</p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Dispute has blocked delivery layout */}
+                      {selectedErrand.status === 'disputed' && (
+                        <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-left space-y-1.5">
+                          <span className="text-xs font-black text-red-950 uppercase tracking-wide flex items-center gap-1">
+                            ⚠️ COURIER PAYOUT LOCKED IN RESOLUTION
+                          </span>
+                          <p className="text-[11px] text-red-800 leading-relaxed font-semibold">
+                            Client raised a dispute stating: ["{selectedErrand.disputeReason}"].<br />
+                            Statement: "{selectedErrand.disputeNotes || 'None'}"
+                          </p>
+                          <p className="text-[10px] text-red-950 bg-white/40 p-2 border border-red-150 rounded-lg leading-relaxed font-medium">
+                            Please reply to the customer via direct courier messaging chat below. Provide relevant shipment details so the escrow can be safely cleared.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Completed / Settled state */}
+                      {(selectedErrand.status === 'completed' || selectedErrand.status === 'resolved') && (
+                        <div className="p-4 bg-emerald-50 border border-emerald-150 rounded-2xl text-center space-y-1">
+                          <p className="text-xs font-extrabold text-emerald-800">
+                            ✓ ESCROW AGREEMENT COMPLETED & CLOSED
+                          </p>
+                          <p className="text-[11px] text-emerald-950">
+                            £{selectedErrand.payout.toFixed(2)} was successfully added to your earnings balance.
+                          </p>
                         </div>
                       )}
                     </div>
@@ -460,36 +635,106 @@ export default function RunnerDashboard() {
 
           {activeRunnerTab === 'earnings' && (
             <div className="space-y-6">
-              {/* Stats overview banner */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-5 bg-surface-container-lowest border rounded-2xl shadow-sm text-left">
+              {/* Dynamic stats banner */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="p-5 bg-surface-container-lowest border border-surface-container rounded-2xl shadow-sm text-left">
                   <span className="text-xs font-bold text-on-surface-variant block uppercase tracking-wider">
-                    Total balance
+                    Total balance (£)
                   </span>
                   <div className="text-2xl font-black text-primary mt-1.5">
                     £{currentUser?.balance.toFixed(2)}
                   </div>
-                  <span className="text-[10px] text-on-surface-variant block mt-1 font-medium">Available for simulated transfer</span>
+                  <span className="text-[10px] text-[#006c49] font-extrabold block mt-1">Available to withdraw</span>
                 </div>
 
-                <div className="p-5 bg-surface-container-lowest border rounded-2xl shadow-sm text-left">
+                <div className="p-5 bg-surface-container-lowest border border-surface-container rounded-2xl shadow-sm text-left">
+                  <span className="text-xs font-bold text-on-surface-variant block uppercase tracking-wider">
+                    Claimed Escrow Holdings
+                  </span>
+                  <div className="text-2xl font-black text-amber-700 mt-1.5">
+                    £{activeErrands.reduce((acc, curr) => acc + curr.payout, 0).toFixed(2)}
+                  </div>
+                  <span className="text-[10px] text-amber-800 font-extrabold block mt-1">Locked until delivery verification</span>
+                </div>
+
+                <div className="p-5 bg-surface-container-lowest border border-surface-container rounded-2xl shadow-sm text-left">
                   <span className="text-xs font-bold text-on-surface-variant block uppercase tracking-wider">
                     Jobs Completed
                   </span>
                   <div className="text-2xl font-black text-[#006c49] mt-1.5">
-                    {currentUser?.jobsCompleted || completedErrandsByRunner.length} Chores
+                    {currentUser?.jobsCompleted || completedErrandsByRunner.length} tasks
                   </div>
-                  <span className="text-[10px] text-on-surface-variant block mt-1 font-medium">All-time marketplace services</span>
+                  <span className="text-[10px] text-on-surface-variant block mt-1 font-medium">All-time courier drops</span>
                 </div>
 
-                <div className="p-5 bg-surface-container-lowest border rounded-2xl shadow-sm text-left">
+                <div className="p-5 bg-surface-container-lowest border border-surface-container rounded-2xl shadow-sm text-left">
                   <span className="text-xs font-bold text-on-surface-variant block uppercase tracking-wider">
-                    Claim Success rate
+                    Trust Rating
                   </span>
                   <div className="text-2xl font-black text-amber-600 mt-1.5">
-                    99.2% Rating
+                    {currentUser?.rating || 4.9} ★
                   </div>
-                  <span className="text-[10px] text-on-surface-variant block mt-1 font-medium">Based on 5-Star delivery reports</span>
+                  <span className="text-[10px] text-on-surface-variant block mt-1 font-medium">Verified shopper reviews</span>
+                </div>
+              </div>
+
+              {/* Bank withdraw form */}
+              <div className="bg-surface-container-lowest border border-surface-container rounded-3xl p-6 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-6 items-start text-left">
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-sm font-black text-[#0b1c30]">Bank Account Withdrawals</h3>
+                    <p className="text-xs text-on-surface-variant font-medium mt-0.5">Transfer your secure courier balance instantly to your physical bank account</p>
+                  </div>
+
+                  <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-2 text-xs font-semibold text-slate-800">
+                    <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Simulated Target Bank Card</span>
+                    <div className="flex justify-between mt-1">
+                      <span>Recipient Bank name:</span>
+                      <span className="font-bold text-slate-950 font-mono">{currentUser?.bankName || 'NatWest Private'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Sort Code:</span>
+                      <span className="font-bold text-slate-950 font-mono">{currentUser?.bankSortCode || '40-11-23'}</span>
+                    </div>
+                    <div className="flex justify-between font-medium">
+                      <span>Account Number:</span>
+                      <span className="font-bold text-slate-950 font-mono">{currentUser?.bankAccountNumber || '••••4567'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3.5 bg-slate-50 p-5 rounded-2xl border border-slate-100">
+                  <span className="text-xs font-black uppercase text-slate-800 tracking-wider">Withdraw Funds Form</span>
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-bold text-slate-500">Amount to Transfer (£)</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        min="1"
+                        max="10000"
+                        value={withdrawAmount}
+                        onChange={(e) => setWithdrawAmount(e.target.value)}
+                        className="bg-white border rounded-xl px-3 py-2 text-sm font-black text-slate-800 focus:outline-none w-32 border-slate-200"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const amt = parseFloat(withdrawAmount);
+                          if (isNaN(amt) || amt <= 0) return;
+                          if (amt > (currentUser?.balance || 0)) {
+                            alert('❌ Insufficient balance in your simulated wallet.');
+                            return;
+                          }
+                          withdrawRunnerEarnings(amt);
+                          alert(`✓ SIMULATED TRANSFER SUCCESSFUL: £${amt.toFixed(2)} dispatched to your ${currentUser?.bankName || 'NatWest'} account!`);
+                          setWithdrawAmount('25');
+                        }}
+                        className="flex-1 bg-secondary text-on-secondary hover:bg-[#005137] duration-200 text-xs font-extrabold rounded-xl shadow-sm cursor-pointer"
+                      >
+                        Initiate Simulated Withdrawal
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 

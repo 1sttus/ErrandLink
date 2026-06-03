@@ -3,7 +3,7 @@ import { useStore } from '../context/StateContext';
 import { 
   Store, ClipboardCheck, Package, ShoppingBag, Plus, Sparkles, LogOut,
   MapPin, Clock, DollarSign, TrendingUp, User, Trash2, ArrowUpRight, CheckCircle2,
-  AlertCircle, ChevronRight, Briefcase
+  AlertCircle, ChevronRight, Briefcase, Eye, MessageSquare
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { 
@@ -23,7 +23,9 @@ export default function VendorDashboard() {
     toggleProductAvailability,
     switchActiveRole,
     logoutUser,
-    setView
+    setView,
+    visitors,
+    sendThankYouToVisitor
   } = useStore();
 
   // New Product Form State
@@ -35,6 +37,10 @@ export default function VendorDashboard() {
   const [imageUrl, setImageUrl] = useState('');
   const [type, setType] = useState<'good' | 'service'>('good');
   const [isAvailable, setIsAvailable] = useState<boolean>(true);
+
+  // Unsent bespoke templates typed by the vendor
+  const [customMessages, setCustomMessages] = useState<Record<string, string>>({});
+  const [sentAlert, setSentAlert] = useState<string | null>(null);
 
   // Active deliveries listed as vendor order errands
   const activeVendorErrands = errands.filter(
@@ -194,6 +200,26 @@ export default function VendorDashboard() {
                 }`}
               >
                 <TrendingUp className="w-4 h-4" /> Bakery Revenue
+              </button>
+              
+              <button
+                onClick={() => setVendorTab('visitors')}
+                className={`w-full flex items-center justify-between px-4 py-3 text-sm font-bold rounded-xl transition-all cursor-pointer ${
+                  activeVendorTab === 'visitors'
+                    ? 'bg-primary text-on-primary shadow-sm'
+                    : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Eye className="w-4 h-4" /> Store Visitors
+                </div>
+                {visitors.length > 0 && (
+                  <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${
+                    activeVendorTab === 'visitors' ? 'bg-[#00ffe0] text-[#0b1c30]' : 'bg-[#e5f5f0] text-[#006c49]'
+                  }`}>
+                    {visitors.length}
+                  </span>
+                )}
               </button>
             </div>
           </div>
@@ -557,6 +583,136 @@ export default function VendorDashboard() {
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {activeVendorTab === 'visitors' && (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-black text-[#0b1c30] tracking-tight flex items-center gap-2">
+                    <Eye className="w-5 h-5 text-secondary" /> 
+                    <span>Live Visitor Logs & Guest Activity Tracker</span>
+                  </h2>
+                  <p className="text-xs text-on-surface-variant mt-0.5">
+                    Monitor people browsing your shop, searching catalog runs, or preparing errand jobs in real time. Thank them with a customized template!
+                  </p>
+                </div>
+
+                {/* Total Stats indicators */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] bg-primary/10 border border-primary/20 text-primary px-3 py-1 font-mono font-bold rounded-lg uppercase">
+                    Total Tracked Sessions: {visitors.length}
+                  </span>
+                  <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 px-3 py-1 font-mono font-bold rounded-lg uppercase">
+                    Thanked: {visitors.filter(v => v.thanked).length}
+                  </span>
+                </div>
+              </div>
+
+              {sentAlert && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center justify-between">
+                  <span className="font-medium">✓ {sentAlert}</span>
+                  <button onClick={() => setSentAlert(null)} className="text-emerald-900 font-extrabold ml-2">✕</button>
+                </div>
+              )}
+
+              {/* Visitors Cards mapping render */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {visitors.length === 0 ? (
+                  <div className="p-12 border border-dashed text-center rounded-2xl md:col-span-2 bg-surface-container-lowest">
+                    <User className="w-10 h-10 text-outline mx-auto mb-2" />
+                    <p className="text-xs font-bold text-on-surface">No visitors logged yet</p>
+                    <p className="text-[11px] text-on-surface-variant mt-1">
+                      As guest users or clients browse and check items, they will instantly turn up in this feed!
+                    </p>
+                  </div>
+                ) : (
+                  [...visitors].reverse().map((v) => {
+                    const messageVal = customMessages[v.id] ?? '';
+                    return (
+                      <div 
+                        key={v.id} 
+                        className={`p-5 rounded-2xl border transition-all duration-300 flex flex-col justify-between ${
+                          v.thanked 
+                            ? 'bg-emerald-50/[0.15] border-emerald-500/20 shadow-xs' 
+                            : 'bg-surface-container-lowest border-surface-container hover:shadow-md'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between gap-1.5 mb-2">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="text-xs font-black text-[#0b1c30] truncate">{v.name}</span>
+                              <span className={`text-[8px] uppercase font-black tracking-widest px-1.5 py-0.5 rounded ${
+                                v.role === 'customer' ? 'bg-indigo-150 text-indigo-700' :
+                                v.role === 'runner' ? 'bg-orange-50 text-orange-700' : 'bg-gray-100 text-gray-700'
+                              }`}>
+                                {v.role}
+                              </span>
+                            </div>
+
+                            <span className="text-[10px] text-on-surface-variant shrink-0 font-mono">
+                              {new Date(v.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                            </span>
+                          </div>
+
+                          <div className="p-3 bg-surface rounded-xl border border-surface-container mt-2">
+                            <span className="text-[9px] text-outline font-black block uppercase tracking-wider mb-0.5">LATEST SHOP ACTIVITY:</span>
+                            <p className="text-xs text-[#0b1c30] font-medium leading-relaxed">
+                              {v.action}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Interactive Message Sender Block */}
+                        <div className="pt-4 border-t border-surface-container mt-4">
+                          {v.thanked ? (
+                            <div className="flex items-center gap-2 bg-[#d1fae5] border border-[#a7f3d0] px-3.5 py-2.5 rounded-xl">
+                              <CheckCircle2 className="w-4 h-4 text-[#047857]" />
+                              <div>
+                                <span className="text-[10px] font-black text-[#047857] block uppercase tracking-wider">GREETINGS SENT SUCCESSFULLY</span>
+                                <span className="text-[10px] text-[#065f46] block font-mono mt-0.5">
+                                  Message: "{v.customMessage || 'Thanks for visiting are ErrandLink store and checking are inventory!'}"
+                                </span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-2.5">
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  placeholder="Type bespoke message (or leave empty for default)..."
+                                  value={messageVal}
+                                  onChange={(e) => {
+                                    setCustomMessages(prev => ({
+                                      ...prev,
+                                      [v.id]: e.target.value
+                                    }));
+                                  }}
+                                  className="flex-1 h-9 px-3 text-xs bg-surface border border-surface-container rounded-xl focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary text-on-surface"
+                                />
+                                <button
+                                  onClick={() => {
+                                    sendThankYouToVisitor(v.id, messageVal.trim() || undefined);
+                                    setSentAlert(`Gratitude greeting dispatched to ${v.name}!`);
+                                    setTimeout(() => setSentAlert(null), 4000);
+                                  }}
+                                  className="h-9 px-3.5 bg-secondary hover:bg-[#005236] text-on-secondary hover:text-white duration-150 text-[10px] font-black uppercase tracking-wider rounded-xl flex items-center justify-center gap-1 cursor-pointer"
+                                >
+                                  <MessageSquare className="w-3.5 h-3.5" /> Send Thank-You
+                                </button>
+                              </div>
+                              <span className="text-[9px] text-[#555] block italic ml-1">
+                                Default dispatch: "Thanks for visiting are ErrandLink store and checking are inventory!"
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
           )}

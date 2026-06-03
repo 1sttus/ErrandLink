@@ -1,25 +1,40 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Errand, VendorProduct, UserProfile, UserRole, Message } from '../types';
+import { Errand, VendorProduct, UserProfile, UserRole, Message, StoreVisitor, ErrandStatus, RunnerVerification, WalletTransaction } from '../types';
 
 interface StateContextType {
-  currentView: 'onboarding' | 'login' | 'signup' | 'customer' | 'runner' | 'vendor' | 'guest';
+  currentView: 'onboarding' | 'login' | 'signup' | 'customer' | 'runner' | 'vendor' | 'guest' | 'admin';
   selectedRoleForOnboarding: UserRole | null;
   currentUser: UserProfile | null;
   errands: Errand[];
   products: VendorProduct[];
-  activeCustomerTab: 'need' | 'active' | 'history' | 'shop';
-  activeRunnerTab: 'jobs' | 'active' | 'earnings';
-  activeVendorTab: 'orders' | 'products' | 'analytics';
+  visitors: StoreVisitor[];
+  transactions: WalletTransaction[];
+  activeCustomerTab: 'need' | 'active' | 'history' | 'shop' | 'wallet';
+  activeRunnerTab: 'jobs' | 'active' | 'earnings' | 'verification';
+  activeVendorTab: 'orders' | 'products' | 'analytics' | 'visitors';
   selectedErrandId: string | null;
   
   // Actions
-  setView: (view: 'onboarding' | 'login' | 'signup' | 'customer' | 'runner' | 'vendor' | 'guest') => void;
+  setView: (view: 'onboarding' | 'login' | 'signup' | 'customer' | 'runner' | 'vendor' | 'guest' | 'admin') => void;
   selectRoleForOnboarding: (role: UserRole | null) => void;
   loginUser: (role: UserRole, email?: string) => void;
   signupUser: (role: UserRole, name: string, email: string) => void;
   logoutUser: () => void;
-  createErrand: (errand: Omit<Errand, 'id' | 'status' | 'customerId' | 'customerName' | 'runnerId' | 'runnerName' | 'createdAt' | 'messages'>) => void;
+  
+  // Escrow & OTP & Dispute methods
+  createErrand: (errand: Omit<Errand, 'id' | 'status' | 'customerId' | 'customerName' | 'runnerId' | 'runnerName' | 'createdAt' | 'messages' | 'deliveryPin' | 'escrowStatus' | 'isFunded' | 'platformFee' | 'runnerFee' | 'totalEscrowAmount' | 'pickupLocation' | 'deliveryLocation'>) => void;
+  fundAndPublishErrand: (errandId: string, paymentMethod: 'wallet' | 'card' | 'bank') => { success: boolean; error?: string };
   acceptErrand: (errandId: string, runnerId: string, runnerName: string) => void;
+  submitDeliveryProof: (errandId: string, deliveryPhoto: string, notes: string) => void;
+  verifyDeliveryOTP: (errandId: string, otp: string) => { success: boolean; error?: string };
+  raiseDispute: (errandId: string, reason: string, notes: string) => void;
+  resolveDispute: (errandId: string, resolution: 'refund_customer' | 'pay_runner') => void;
+  
+  // Wallets & Verification methods
+  fundCustomerWallet: (amount: number) => void;
+  withdrawRunnerEarnings: (amount: number, bankName: string, bankSortCode: string, bankAccountNumber: string) => { success: boolean; error?: string };
+  updateRunnerVerification: (field: keyof RunnerVerification, value: boolean) => void;
+  
   advanceErrandStatus: (errandId: string) => void;
   cancelErrand: (errandId: string) => void;
   sendMessage: (errandId: string, text: string, senderRole: 'customer' | 'runner') => void;
@@ -30,12 +45,14 @@ interface StateContextType {
   deleteProduct: (productId: string) => void;
   toggleProductAvailability: (productId: string) => void;
   switchActiveRole: (role: UserRole) => void;
+  logVisitorActivity: (name: string, action: string, role: 'guest' | 'customer' | 'runner') => void;
+  sendThankYouToVisitor: (visitorId: string, customMessage: string) => void;
   
   // Selection
   setSelectedErrandId: (id: string | null) => void;
-  setCustomerTab: (tab: 'need' | 'active' | 'history' | 'shop') => void;
-  setRunnerTab: (tab: 'jobs' | 'active' | 'earnings') => void;
-  setVendorTab: (tab: 'orders' | 'products' | 'analytics') => void;
+  setCustomerTab: (tab: 'need' | 'active' | 'history' | 'shop' | 'wallet') => void;
+  setRunnerTab: (tab: 'jobs' | 'active' | 'earnings' | 'verification') => void;
+  setVendorTab: (tab: 'orders' | 'products' | 'analytics' | 'visitors') => void;
 
   // Simulator helper
   simulateRunnerActivity: (errandId: string) => void;
@@ -88,7 +105,7 @@ const INITIAL_ERRANDS: Errand[] = [
     title: 'Grocery Pickup at Whole Foods',
     description: 'Need someone to pick up standard groceries. I have already ordered and paid for it on the app—just need a Runner with a car to collect it from the curbside spot and leave on my porch.',
     category: 'shopping',
-    status: 'posted',
+    status: 'pending',
     payout: 18.50,
     location: '240 High St, Kensington',
     latitude: 51.5014,
@@ -99,14 +116,22 @@ const INITIAL_ERRANDS: Errand[] = [
     runnerName: null,
     createdAt: new Date(Date.now() - 3600000 * 2).toISOString(), // 2 hours ago
     items: ['Whole Foods Pickup - Order #WF-9942A'],
-    messages: []
+    messages: [],
+    deliveryPin: '2748',
+    escrowStatus: 'held',
+    isFunded: true,
+    platformFee: 1.50,
+    runnerFee: 18.50,
+    totalEscrowAmount: 20.00,
+    pickupLocation: 'Whole Foods Market, High St Kensington',
+    deliveryLocation: '240 High St, Kensington'
   },
   {
     id: 'err-2',
     title: 'Urgent Vet Prescription Collect',
     description: 'Pick up allergy medication for my golden retriever from VetExpress Clinic and bring it to my address. No payment needed at counter, veterinarian has prescription details.',
     category: 'delivery',
-    status: 'assigned',
+    status: 'accepted',
     payout: 14.00,
     location: 'VetExpress & Pharmacy, Bloomsbury',
     latitude: 51.5200,
@@ -130,14 +155,22 @@ const INITIAL_ERRANDS: Errand[] = [
         text: 'No problem! I am heading out now and will arrive at the clinic in 15 minutes.',
         timestamp: new Date(Date.now() - 3600000 * 3.4).toISOString()
       }
-    ]
+    ],
+    deliveryPin: '3941',
+    escrowStatus: 'held',
+    isFunded: true,
+    platformFee: 1.50,
+    runnerFee: 14.00,
+    totalEscrowAmount: 15.50,
+    pickupLocation: 'VetExpress Clinic Bloomsbury, WC1H',
+    deliveryLocation: 'Bloomsbury Terrace Apartment 3'
   },
   {
     id: 'err-3',
     title: 'Walk Max the Golden Retriever',
     description: 'Need an experienced pet lover to walk our energetic dog Max for 45 minutes around Holland Park. He has a harness and leash waiting inside the porch gates.',
     category: 'pet',
-    status: 'posted',
+    status: 'pending',
     payout: 22.00,
     location: 'Melbury Road, Kensington',
     latitude: 51.4988,
@@ -148,7 +181,15 @@ const INITIAL_ERRANDS: Errand[] = [
     runnerName: null,
     createdAt: new Date(Date.now() - 1800000).toISOString(), // 30 min ago
     items: ['45-minute active outdoor dog walk', 'Refill water bowl in kitchen entrance'],
-    messages: []
+    messages: [],
+    deliveryPin: '8023',
+    escrowStatus: 'held',
+    isFunded: true,
+    platformFee: 1.50,
+    runnerFee: 22.00,
+    totalEscrowAmount: 23.50,
+    pickupLocation: 'Holland Park Pet Lodge',
+    deliveryLocation: 'Melbury Road, Kensington'
   },
   {
     id: 'err-4',
@@ -175,12 +216,78 @@ const INITIAL_ERRANDS: Errand[] = [
         text: 'Delivered at your front door, thank you!',
         timestamp: new Date(Date.now() - 3600000 * 7.5).toISOString()
       }
-    ]
+    ],
+    deliveryPin: '5812',
+    escrowStatus: 'released',
+    isFunded: true,
+    platformFee: 1.50,
+    runnerFee: 11.50,
+    totalEscrowAmount: 13.00,
+    pickupLocation: 'London Artisan Bakery, SW3 3AH',
+    deliveryLocation: 'Chelsea Residential Suites'
+  }
+];
+
+const INITIAL_TRANSACTIONS: WalletTransaction[] = [
+  {
+    id: 'tx-1',
+    userId: 'cust-1',
+    amount: 100.00,
+    type: 'credit',
+    title: 'Wallet Top-up (Fast Debit)',
+    category: 'wallet_fund',
+    timestamp: new Date(Date.now() - 3600000 * 12).toISOString()
+  },
+  {
+    id: 'tx-2',
+    userId: 'run-1',
+    amount: 75.24,
+    type: 'credit',
+    title: 'Delivery Earnings (Bakery Order #5812)',
+    category: 'runner_payout',
+    timestamp: new Date(Date.now() - 3600000 * 8).toISOString(),
+    errandId: 'err-4'
+  }
+];
+
+const INITIAL_VISITORS: StoreVisitor[] = [
+  {
+    id: 'vis-1',
+    name: 'Melissa G. (Chelsea)',
+    visitedAt: new Date(Date.now() - 1800000).toISOString(), // 30 mins ago
+    action: 'Browsed Cold-Pressed Green Juice',
+    role: 'guest',
+    thanked: false,
+  },
+  {
+    id: 'vis-2',
+    name: 'Arthur Dent (Kensington)',
+    visitedAt: new Date(Date.now() - 5400000).toISOString(), // 1.5 hours ago
+    action: 'Searched "sourdough bread" menu',
+    role: 'customer',
+    thanked: true,
+    thankedMessage: 'Thanks for looking around! We baked our sourdough fresh this morning. Grab one now!'
+  },
+  {
+    id: 'vis-3',
+    name: 'Rory Fletcher (Eco-Runner)',
+    visitedAt: new Date(Date.now() - 7920000).toISOString(), // 2.2 hours ago
+    action: 'Viewed merchant courier dispatch schedules',
+    role: 'runner',
+    thanked: false,
+  },
+  {
+    id: 'vis-4',
+    name: 'Eleanor Vance (High St)',
+    visitedAt: new Date(Date.now() - 14400000).toISOString(), // 4 hours ago
+    action: 'Browsed Fresh Organic Strawberries',
+    role: 'customer',
+    thanked: false,
   }
 ];
 
 export const StateProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentView, setView] = useState<'onboarding' | 'login' | 'signup' | 'customer' | 'runner' | 'vendor' | 'guest'>('guest');
+  const [currentView, setView] = useState<'onboarding' | 'login' | 'signup' | 'customer' | 'runner' | 'vendor' | 'guest' | 'admin'>('guest');
   const [selectedRoleForOnboarding, selectRoleForOnboarding] = useState<UserRole | null>(null);
   
   // Persistent items using localStorage
@@ -199,10 +306,20 @@ export const StateProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
   });
 
+  const [visitors, setVisitors] = useState<StoreVisitor[]>(() => {
+    const saved = localStorage.getItem('errandlink_visitors');
+    return saved ? JSON.parse(saved) : INITIAL_VISITORS;
+  });
+
+  const [transactions, setTransactions] = useState<WalletTransaction[]>(() => {
+    const saved = localStorage.getItem('errandlink_transactions');
+    return saved ? JSON.parse(saved) : INITIAL_TRANSACTIONS;
+  });
+
   // UI Tabs State
-  const [activeCustomerTab, setCustomerTab] = useState<'need' | 'active' | 'history' | 'shop'>('need');
-  const [activeRunnerTab, setRunnerTab] = useState<'jobs' | 'active' | 'earnings'>('jobs');
-  const [activeVendorTab, setVendorTab] = useState<'orders' | 'products' | 'analytics'>('orders');
+  const [activeCustomerTab, setCustomerTab] = useState<'need' | 'active' | 'history' | 'shop' | 'wallet'>('need');
+  const [activeRunnerTab, setRunnerTab] = useState<'jobs' | 'active' | 'earnings' | 'verification'>('jobs');
+  const [activeVendorTab, setVendorTab] = useState<'orders' | 'products' | 'analytics' | 'visitors'>('orders');
   const [selectedErrandId, setSelectedErrandId] = useState<string | null>(null);
 
   // Sync to local storage
@@ -221,6 +338,14 @@ export const StateProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     localStorage.setItem('errandlink_products', JSON.stringify(products));
   }, [products]);
+
+  useEffect(() => {
+    localStorage.setItem('errandlink_visitors', JSON.stringify(visitors));
+  }, [visitors]);
+
+  useEffect(() => {
+    localStorage.setItem('errandlink_transactions', JSON.stringify(transactions));
+  }, [transactions]);
 
   // Load active view state based on user role if logged in on start
   useEffect(() => {
@@ -252,6 +377,17 @@ export const StateProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150',
         rating: 4.8,
         jobsCompleted: 34,
+        todayEarnings: 75.24,
+        pendingEscrowEarnings: 15.50,
+        bankName: 'Monzo Bank',
+        bankSortCode: '04-00-04',
+        bankAccountNumber: '94821034',
+        verification: {
+          phoneVerified: true,
+          idVerified: true,
+          selfieVerified: true,
+          bankVerified: true
+        }
       },
       vendor: {
         id: 'vendor-1',
@@ -261,6 +397,15 @@ export const StateProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         balance: 1420.50,
         avatarUrl: 'https://images.unsplash.com/photo-1517433456452-f9633a875f6f?auto=format&fit=crop&q=80&w=150',
         rating: 4.7,
+      },
+      admin: {
+        id: 'admin-1',
+        role: 'admin',
+        name: 'Devin ErrandLink Admin',
+        email: email || 'admin@errandlink.com',
+        balance: 150000.00,
+        avatarUrl: 'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?auto=format&fit=crop&q=80&w=150',
+        rating: 5.0
       }
     };
 
@@ -278,7 +423,20 @@ export const StateProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       balance: role === 'runner' ? 0.00 : 100.00, // free startup credit for shoppers
       avatarUrl: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(name)}`,
       rating: 5.0,
-      ...(role === 'runner' ? { jobsCompleted: 0 } : {})
+      ...(role === 'runner' ? { 
+        jobsCompleted: 0,
+        todayEarnings: 0,
+        pendingEscrowEarnings: 0,
+        bankName: '',
+        bankSortCode: '',
+        bankAccountNumber: '',
+        verification: {
+          phoneVerified: false,
+          idVerified: false,
+          selfieVerified: false,
+          bankVerified: false
+        }
+      } : {})
     };
     setCurrentUser(user);
     setView(role);
@@ -290,32 +448,82 @@ export const StateProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setView('onboarding');
   };
 
-  const createErrand = (errandData: Omit<Errand, 'id' | 'status' | 'customerId' | 'customerName' | 'runnerId' | 'runnerName' | 'createdAt' | 'messages'>) => {
+  const createErrand = (errandData: Omit<Errand, 'id' | 'status' | 'customerId' | 'customerName' | 'runnerId' | 'runnerName' | 'createdAt' | 'messages' | 'deliveryPin' | 'escrowStatus' | 'isFunded' | 'platformFee' | 'runnerFee' | 'totalEscrowAmount' | 'pickupLocation' | 'deliveryLocation'>) => {
     if (!currentUser) return;
     
-    // Deduct cost and payout from customer's balance
-    const cost = errandData.payout;
-    if (currentUser.balance < cost) {
-      alert("Insufficient funds! Please top up your simulated budget.");
-      return;
-    }
+    const payout = errandData.payout;
+    const platformFee = 1.50;
+    const totalCost = Number((payout + platformFee).toFixed(2));
 
     const newErrand: Errand = {
       ...errandData,
       id: `err-${Math.random().toString(36).substr(2, 9)}`,
-      status: 'posted',
+      status: 'pending',
       customerId: currentUser.id,
       customerName: currentUser.name,
       runnerId: null,
       runnerName: null,
       createdAt: new Date().toISOString(),
-      messages: []
+      messages: [],
+      deliveryPin: Math.floor(1000 + Math.random() * 9000).toString(),
+      escrowStatus: 'none',
+      isFunded: false,
+      platformFee,
+      runnerFee: payout,
+      totalEscrowAmount: totalCost,
+      pickupLocation: errandData.category === 'vendor_order' ? 'London Artisan Bakery' : 'Specified Pickup Location',
+      deliveryLocation: errandData.location
     };
 
     setErrands(prev => [newErrand, ...prev]);
-    setCurrentUser(prev => prev ? { ...prev, balance: Number((prev.balance - cost).toFixed(2)) } : null);
     setCustomerTab('active');
     setSelectedErrandId(newErrand.id);
+  };
+
+  const fundAndPublishErrand = (errandId: string, paymentMethod: 'wallet' | 'card' | 'bank') => {
+    const errand = errands.find(e => e.id === errandId);
+    if (!errand) return { success: false, error: 'Errand not found' };
+    
+    const cost = errand.totalEscrowAmount;
+    
+    if (paymentMethod === 'wallet') {
+      if (!currentUser) return { success: false, error: 'Must be logged in to pay' };
+      if (currentUser.balance < cost) {
+        return { success: false, error: `Insufficient wallet balance. You need £${cost.toFixed(2)} but only have £${currentUser.balance.toFixed(2)}.` };
+      }
+      
+      // Deduct from customer wallet
+      setCurrentUser(prev => prev ? { ...prev, balance: Number((prev.balance - cost).toFixed(2)) } : null);
+    }
+    
+    // Register Transaction
+    const newTx: WalletTransaction = {
+      id: `tx-${Math.random().toString(36).substr(2, 9)}`,
+      userId: errand.customerId,
+      amount: cost,
+      type: 'debit',
+      title: `Escrow Secured (${paymentMethod.toUpperCase()})`,
+      category: 'escrow_hold',
+      timestamp: new Date().toISOString(),
+      errandId: errand.id
+    };
+    
+    setTransactions(prev => [newTx, ...prev]);
+    
+    // Set Errand properties
+    setErrands(prev => prev.map(e => {
+      if (e.id === errandId) {
+        return {
+          ...e,
+          isFunded: true,
+          escrowStatus: 'held',
+          status: 'pending' as ErrandStatus
+        };
+      }
+      return e;
+    }));
+    
+    return { success: true };
   };
 
   const acceptErrand = (errandId: string, runnerId: string, runnerName: string) => {
@@ -323,63 +531,331 @@ export const StateProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (errand.id === errandId) {
         return {
           ...errand,
-          status: 'assigned',
+          status: 'accepted' as ErrandStatus,
           runnerId,
-          runnerName
+          runnerName,
+          messages: [
+            ...errand.messages,
+            {
+              id: `msg-acc-${Date.now()}`,
+              senderRole: 'runner',
+              text: `Hello! I have accepted your Errand request and I am en route now.`,
+              timestamp: new Date().toISOString()
+            }
+          ]
         };
       }
       return errand;
     }));
+  };
+
+  const submitDeliveryProof = (errandId: string, deliveryPhoto: string, notes: string) => {
+    setErrands(prev => prev.map(e => {
+      if (e.id === errandId) {
+        return {
+          ...e,
+          status: 'awaiting_otp' as ErrandStatus,
+          deliveryPhoto,
+          deliveryNotes: notes,
+          messages: [
+            ...e.messages,
+            {
+              id: `msg-pod-${Date.now()}`,
+              senderRole: 'runner',
+              text: `📍 Proof of delivery uploaded! Delivery Notes: "${notes || 'None'}". Awaiting OTP confirmationPIN from customer to finalize release.`,
+              timestamp: new Date().toISOString()
+            }
+          ]
+        };
+      }
+      return e;
+    }));
+  };
+
+  const verifyDeliveryOTP = (errandId: string, otp: string) => {
+    const errand = errands.find(e => e.id === errandId);
+    if (!errand) return { success: false, error: 'Errand not found' };
+    if (errand.deliveryPin !== otp.trim()) {
+      return { success: false, error: 'Incorrect 4-digit Delivery PIN. Please ask the customer for their active code.' };
+    }
+
+    setErrands(prev => prev.map(e => {
+      if (e.id === errandId) {
+        return {
+          ...e,
+          status: 'completed' as ErrandStatus,
+          escrowStatus: 'released',
+          messages: [
+            ...e.messages,
+            {
+              id: `msg-otp-${Date.now()}`,
+              senderRole: 'runner',
+              text: `✓ Handshake Verified! OTP PIN correct. Escrow Released: £${e.runnerFee.toFixed(2)} credited to runner.`,
+              timestamp: new Date().toISOString()
+            }
+          ]
+        };
+      }
+      return e;
+    }));
+
+    if (errand.runnerId) {
+      // Payout to active logged-in runner
+      setCurrentUser(prev => {
+        if (prev && prev.id === errand.runnerId) {
+          const newBal = Number((prev.balance + errand.runnerFee).toFixed(2));
+          const newToday = Number(((prev.todayEarnings || 0) + errand.runnerFee).toFixed(2));
+          const newJobs = (prev.jobsCompleted || 0) + 1;
+          const newPending = Math.max(0, Number(((prev.pendingEscrowEarnings || 0) - errand.runnerFee).toFixed(2)));
+          return {
+            ...prev,
+            balance: newBal,
+            todayEarnings: newToday,
+            jobsCompleted: newJobs,
+            pendingEscrowEarnings: newPending
+          };
+        }
+        return prev;
+      });
+
+      // Payout run transaction trace
+      const txRunner: WalletTransaction = {
+        id: `tx-payout-${Math.random().toString(36).substr(2, 9)}`,
+        userId: errand.runnerId,
+        amount: errand.runnerFee,
+        type: 'credit',
+        title: `Runner Payout (Errand #${errand.id.substring(0, 5)})`,
+        category: 'runner_payout',
+        timestamp: new Date().toISOString(),
+        errandId: errand.id
+      };
+
+      const txAdmin: WalletTransaction = {
+        id: `tx-comm-${Math.random().toString(36).substr(2, 9)}`,
+        userId: 'admin-1',
+        amount: errand.platformFee,
+        type: 'credit',
+        title: `Platform Service Fee (Errand #${errand.id.substring(0, 5)})`,
+        category: 'platform_commission',
+        timestamp: new Date().toISOString(),
+        errandId: errand.id
+      };
+
+      setTransactions(prev => [txRunner, txAdmin, ...prev]);
+    }
+
+    return { success: true };
+  };
+
+  const raiseDispute = (errandId: string, reason: string, notes: string) => {
+    setErrands(prev => prev.map(e => {
+      if (e.id === errandId) {
+        return {
+          ...e,
+          status: 'disputed' as ErrandStatus,
+          escrowStatus: 'frozen',
+          disputeReason: reason,
+          disputeNotes: notes,
+          messages: [
+            ...e.messages,
+            {
+              id: `msg-dispute-${Date.now()}`,
+              senderRole: 'customer',
+              text: `⚠️ Raised Dispute: [${reason.toUpperCase()}] - "${notes}". Escrow payment has been frozen.`,
+              timestamp: new Date().toISOString()
+            }
+          ]
+        };
+      }
+      return e;
+    }));
+  };
+
+  const resolveDispute = (errandId: string, resolution: 'refund_customer' | 'pay_runner') => {
+    const errand = errands.find(e => e.id === errandId);
+    if (!errand) return;
+
+    setErrands(prev => prev.map(e => {
+      if (e.id === errandId) {
+        return {
+          ...e,
+          status: 'resolved' as ErrandStatus,
+          escrowStatus: 'released',
+          messages: [
+            ...e.messages,
+            {
+              id: `msg-resolv-${Date.now()}`,
+              senderRole: 'customer',
+              text: `🏛️ Dispute Resolved by Platform Specialist. Verdict: ${resolution === 'refund_customer' ? 'Refunded customer in full' : 'Released funds to runner'}.`,
+              timestamp: new Date().toISOString()
+            }
+          ]
+        };
+      }
+      return e;
+    }));
+
+    if (resolution === 'refund_customer') {
+      setCurrentUser(prev => {
+        if (prev && prev.id === errand.customerId) {
+          return {
+            ...prev,
+            balance: Number((prev.balance + errand.totalEscrowAmount).toFixed(2))
+          };
+        }
+        return prev;
+      });
+
+      const refundTx: WalletTransaction = {
+        id: `tx-dispute-ref-${Math.random().toString(36).substr(2, 9)}`,
+        userId: errand.customerId,
+        amount: errand.totalEscrowAmount,
+        type: 'credit',
+        title: `Court Refund (Dispute Errand #${errand.id.substring(0, 5)})`,
+        category: 'refund',
+        timestamp: new Date().toISOString(),
+        errandId: errand.id
+      };
+      setTransactions(prev => [refundTx, ...prev]);
+    } else if (resolution === 'pay_runner' && errand.runnerId) {
+      setCurrentUser(prev => {
+        if (prev && prev.id === errand.runnerId) {
+          return {
+            ...prev,
+            balance: Number((prev.balance + errand.runnerFee).toFixed(2)),
+            todayEarnings: Number(((prev.todayEarnings || 0) + errand.runnerFee).toFixed(2))
+          };
+        }
+        return prev;
+      });
+
+      const payoutTx: WalletTransaction = {
+        id: `tx-dispute-pay-${Math.random().toString(36).substr(2, 9)}`,
+        userId: errand.runnerId,
+        amount: errand.runnerFee,
+        type: 'credit',
+        title: `Specialist Released Earnings (Errand #${errand.id.substring(0, 5)})`,
+        category: 'runner_payout',
+        timestamp: new Date().toISOString(),
+        errandId: errand.id
+      };
+      setTransactions(prev => [payoutTx, ...prev]);
+    }
+  };
+
+  const fundCustomerWallet = (amount: number) => {
+    if (!currentUser) return;
+    setCurrentUser(prev => prev ? {
+      ...prev,
+      balance: Number((prev.balance + amount).toFixed(2))
+    } : null);
+
+    const checkTx: WalletTransaction = {
+      id: `tx-fund-${Math.random().toString(36).substr(2, 9)}`,
+      userId: currentUser.id,
+      amount,
+      type: 'credit',
+      title: 'Simulated Wallet Funding Link',
+      category: 'wallet_fund',
+      timestamp: new Date().toISOString()
+    };
+    setTransactions(prev => [checkTx, ...prev]);
+  };
+
+  const withdrawRunnerEarnings = (amount: number, bankName: string, bankSortCode: string, bankAccountNumber: string) => {
+    if (!currentUser) return { success: false, error: 'User session not active' };
+    if (currentUser.balance < amount) {
+      return { success: false, error: 'Insufficient wallet earnings balance' };
+    }
+    
+    setCurrentUser(prev => prev ? {
+      ...prev,
+      balance: Number((prev.balance - amount).toFixed(2)),
+      bankName,
+      bankSortCode,
+      bankAccountNumber
+    } : null);
+
+    const listTx: WalletTransaction = {
+      id: `tx-withdraw-${Math.random().toString(36).substr(2, 9)}`,
+      userId: currentUser.id,
+      amount,
+      type: 'debit',
+      title: `Withdrew Earnings to ${bankName}`,
+      category: 'withdrawal',
+      timestamp: new Date().toISOString()
+    };
+
+    setTransactions(prev => [listTx, ...prev]);
+    return { success: true };
+  };
+
+  const updateRunnerVerification = (field: keyof RunnerVerification, value: boolean) => {
+    setCurrentUser(prev => {
+      if (prev && prev.role === 'runner') {
+        const prevVerif = prev.verification || { phoneVerified: false, idVerified: false, selfieVerified: false, bankVerified: false };
+        return {
+          ...prev,
+          verification: {
+            ...prevVerif,
+            [field]: value
+          }
+        };
+      }
+      return prev;
+    });
   };
 
   const advanceErrandStatus = (errandId: string) => {
     setErrands(prev => prev.map(errand => {
       if (errand.id === errandId) {
-        let nextStatus: Errand['status'] = errand.status;
-        let pResult = { ...errand };
-        
-        if (errand.status === 'assigned') {
-          nextStatus = 'in_progress';
-          pResult.messages.push({
-            id: `msg-auto-${Date.now()}`,
-            senderRole: 'runner',
-            text: 'I have successfully collected the items and I am heading over to your delivery address now!',
-            timestamp: new Date().toISOString()
-          });
-        } else if (errand.status === 'in_progress') {
-          nextStatus = 'completed';
-          pResult.messages.push({
-            id: `msg-auto-${Date.now()}`,
-            senderRole: 'runner',
-            text: 'Items delivered securely! I have clicked complete. Have a wonderful day!',
-            timestamp: new Date().toISOString()
-          });
+        let nextStatus: ErrandStatus = errand.status;
+        const msgList = [...errand.messages];
 
-          // Payout to Runner (done outside this map for safety, or inside if we update runner profiles)
-          triggerRunnerPayout(errand.payout, errand.runnerId);
+        if (errand.status === 'accepted') {
+          nextStatus = 'runner_en_route';
+          msgList.push({
+            id: `msg-auto-${Date.now()}`,
+            senderRole: 'runner',
+            text: 'I am en route to collect the errand item now!',
+            timestamp: new Date().toISOString()
+          });
+        } else if (errand.status === 'runner_en_route') {
+          nextStatus = 'item_picked_up';
+          msgList.push({
+            id: `msg-auto-${Date.now()}`,
+            senderRole: 'runner',
+            text: 'We have picked up the items. Securing package in courier parcel container.',
+            timestamp: new Date().toISOString()
+          });
+        } else if (errand.status === 'item_picked_up') {
+          nextStatus = 'in_transit';
+          msgList.push({
+            id: `msg-auto-${Date.now()}`,
+            senderRole: 'runner',
+            text: 'Package in active transit. Turning on GPS tracker link.',
+            timestamp: new Date().toISOString()
+          });
+        } else if (errand.status === 'in_transit') {
+          nextStatus = 'delivered';
+          msgList.push({
+            id: `msg-auto-${Date.now()}`,
+            senderRole: 'runner',
+            text: 'Arrived at dropsite address node! Submitting Proof of Delivery proof cards.',
+            timestamp: new Date().toISOString()
+          });
+        } else if (errand.status === 'delivered') {
+          nextStatus = 'awaiting_otp';
         }
-        
-        pResult.status = nextStatus;
-        return pResult;
+
+        return {
+          ...errand,
+          status: nextStatus,
+          messages: msgList
+        };
       }
       return errand;
     }));
-  };
-
-  const triggerRunnerPayout = (payout: number, runnerId: string | null) => {
-    if (!runnerId) return;
-    
-    // Update active user state if the runner is the logged-in user
-    setCurrentUser(prev => {
-      if (prev && prev.id === runnerId) {
-        return {
-          ...prev,
-          balance: Number((prev.balance + payout).toFixed(2)),
-          jobsCompleted: (prev.jobsCompleted || 0) + 1
-        };
-      }
-      return prev;
-    });
   };
 
   const cancelErrand = (errandId: string) => {
@@ -387,11 +863,23 @@ export const StateProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (!errand) return;
     
     // Refund customer
-    if (currentUser && currentUser.id === errand.customerId) {
+    if (errand.isFunded && currentUser && currentUser.id === errand.customerId) {
       setCurrentUser(prev => prev ? {
         ...prev,
-        balance: Number((prev.balance + errand.payout).toFixed(2))
+        balance: Number((prev.balance + errand.totalEscrowAmount).toFixed(2))
       } : null);
+
+      const refundTx: WalletTransaction = {
+        id: `tx-cancel-refund-${Math.random().toString(36).substr(2, 9)}`,
+        userId: errand.customerId,
+        amount: errand.totalEscrowAmount,
+        type: 'credit',
+        title: `Refund (Cancelled Errand)`,
+        category: 'refund',
+        timestamp: new Date().toISOString(),
+        errandId: errand.id
+      };
+      setTransactions(prev => [refundTx, ...prev]);
     }
     
     setErrands(prev => prev.filter(e => e.id !== errandId));
@@ -443,13 +931,41 @@ export const StateProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
+  const logVisitorActivity = (name: string, action: string, role: 'guest' | 'customer' | 'runner') => {
+    const newVisitor: StoreVisitor = {
+      id: `vis-${Math.random().toString(36).substr(2, 9)}`,
+      name,
+      visitedAt: new Date().toISOString(),
+      action,
+      role,
+      thanked: false
+    };
+    setVisitors(prev => [newVisitor, ...prev.slice(0, 49)]);
+  };
+
+  const sendThankYouToVisitor = (visitorId: string, customMessage: string) => {
+    setVisitors(prev => prev.map(v => {
+      if (v.id === visitorId) {
+        return {
+          ...v,
+          thanked: true,
+          thankedMessage: customMessage
+        };
+      }
+      return v;
+    }));
+  };
+
   const orderProduct = (productId: string, quantity: number, deliverAddress: string) => {
     const item = products.find(p => p.id === productId);
     if (!item || !currentUser) return;
 
-    const totalCost = Number((item.price * quantity).toFixed(2));
+    const payout = 5.00 + (quantity * 1.50);
+    const platformFee = 1.50;
+    const totalCost = Number((item.price * quantity + payout + platformFee).toFixed(2));
+    
     if (currentUser.balance < totalCost) {
-      alert("Insufficient funds in current customer profile!");
+      alert("Insufficient funds in current customer profile to secure item cost + logistics escrow fee!");
       return;
     }
 
@@ -462,17 +978,13 @@ export const StateProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // Reduce stock
     setProducts(prev => prev.map(p => p.id === productId ? { ...p, stock: Math.max(0, p.stock - quantity) } : p));
 
-    // Spawn an Errand of type vendor_order automatically!
-    // Payout for the runner is computed as a baseline £8 + £1.50 per unit item
-    const deliveryPayout = 5.00 + (quantity * 1.50);
-
     const newErrand: Errand = {
       id: `err-${Math.random().toString(36).substr(2, 9)}`,
       title: `Deliver ${item.name} x${quantity}`,
       description: `Delivery request from ${item.category} Vendor: ${item.name} order needs swift transit to customer's home. Store has prepared dispatch packet, runner only needs pickup.`,
       category: 'vendor_order',
-      status: 'posted',
-      payout: deliveryPayout,
+      status: 'pending',
+      payout,
       location: `Artisanal Shop to ${deliverAddress}`,
       latitude: 51.52 + (Math.random() - 0.5) * 0.05,
       longitude: -0.12 + (Math.random() - 0.5) * 0.05,
@@ -484,26 +996,47 @@ export const StateProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       vendorName: 'London Artisan Bakery',
       createdAt: new Date().toISOString(),
       items: [`${item.name} (Qty: ${quantity})`],
-      messages: []
+      messages: [],
+      deliveryPin: Math.floor(1000 + Math.random() * 9000).toString(),
+      escrowStatus: 'held',
+      isFunded: true,
+      platformFee,
+      runnerFee: payout,
+      totalEscrowAmount: Number((payout + platformFee).toFixed(2)),
+      pickupLocation: 'London Artisan Bakery, SW3 3AH',
+      deliveryLocation: deliverAddress
     };
 
     setErrands(prev => [newErrand, ...prev]);
+
+    // Record hold transaction
+    const newTx: WalletTransaction = {
+      id: `tx-order-${Math.random().toString(36).substr(2, 9)}`,
+      userId: currentUser.id,
+      amount: totalCost,
+      type: 'debit',
+      title: `Order & Delivery Escrow Secured: ${item.name}`,
+      category: 'escrow_hold',
+      timestamp: new Date().toISOString(),
+      errandId: newErrand.id
+    };
+    setTransactions(prev => [newTx, ...prev]);
+
     setCustomerTab('active');
     setSelectedErrandId(newErrand.id);
   };
 
-  // Background Simulator Helper
+  // Background Simulator Helper supporting multi-step logistics progress
   const simulateRunnerActivity = (errandId: string) => {
     const target = errands.find(e => e.id === errandId);
     if (!target) return;
 
-    if (target.status === 'posted') {
-      // Step 1: Simulated Runner Assigns
+    if (target.status === 'pending') {
       setErrands(prev => prev.map(e => {
         if (e.id === errandId) {
           return {
             ...e,
-            status: 'assigned',
+            status: 'accepted' as ErrandStatus,
             runnerId: 'run-simulated',
             runnerName: 'Rory Fletcher (Pro-Runner)',
             messages: [
@@ -511,7 +1044,7 @@ export const StateProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               {
                 id: `msg-sim-${Date.now()}`,
                 senderRole: 'runner',
-                text: "Hi! I have accepted your ErrandLink. I'm near the pickup node and starting the transit task.",
+                text: "Hi! I have accepted your Errand request. I am nearby and preparing dispatch transit.",
                 timestamp: new Date().toISOString()
               }
             ]
@@ -519,19 +1052,18 @@ export const StateProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
         return e;
       }));
-    } else if (target.status === 'assigned') {
-      // Step 2: Simulated Runner Starts Work
+    } else if (target.status === 'accepted') {
       setErrands(prev => prev.map(e => {
         if (e.id === errandId) {
           return {
             ...e,
-            status: 'in_progress',
+            status: 'runner_en_route' as ErrandStatus,
             messages: [
               ...e.messages,
               {
                 id: `msg-sim-${Date.now()}`,
                 senderRole: 'runner',
-                text: "Collected files and inventory packets. I am currently in transit to your drop-off site! 📍🚲",
+                text: "I am en route to collect the errand packet. Keeping pace active!",
                 timestamp: new Date().toISOString()
               }
             ]
@@ -539,19 +1071,18 @@ export const StateProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
         return e;
       }));
-    } else if (target.status === 'in_progress') {
-      // Step 3: Simulated Runner Completes Job
+    } else if (target.status === 'runner_en_route') {
       setErrands(prev => prev.map(e => {
         if (e.id === errandId) {
           return {
             ...e,
-            status: 'completed',
+            status: 'item_picked_up' as ErrandStatus,
             messages: [
               ...e.messages,
               {
                 id: `msg-sim-${Date.now()}`,
                 senderRole: 'runner',
-                text: "Task finalized! Package hand-delivered securely to recipient. Cheers! 🥳🙌",
+                text: "I have securely collected the item package! Beginning outward transport.",
                 timestamp: new Date().toISOString()
               }
             ]
@@ -559,7 +1090,65 @@ export const StateProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
         return e;
       }));
-      // If it's a simulated runner, they get the payout locally, no need to adapt logged-in runner's wallet unless it is the user.
+    } else if (target.status === 'item_picked_up') {
+      setErrands(prev => prev.map(e => {
+        if (e.id === errandId) {
+          return {
+            ...e,
+            status: 'in_transit' as ErrandStatus,
+            messages: [
+              ...e.messages,
+              {
+                id: `msg-sim-${Date.now()}`,
+                senderRole: 'runner',
+                text: "Traveling currently. Estimated ETA on dropsite node is 8 mins. Underway! 🚲",
+                timestamp: new Date().toISOString()
+              }
+            ]
+          };
+        }
+        return e;
+      }));
+    } else if (target.status === 'in_transit') {
+      setErrands(prev => prev.map(e => {
+        if (e.id === errandId) {
+          return {
+            ...e,
+            status: 'delivered' as ErrandStatus,
+            messages: [
+              ...e.messages,
+              {
+                id: `msg-sim-${Date.now()}`,
+                senderRole: 'runner',
+                text: "I have arrived at the recipient doorstep. Ready to handover package packet.",
+                timestamp: new Date().toISOString()
+              }
+            ]
+          };
+        }
+        return e;
+      }));
+    } else if (target.status === 'delivered') {
+      setErrands(prev => prev.map(e => {
+        if (e.id === errandId) {
+          return {
+            ...e,
+            status: 'awaiting_otp' as ErrandStatus,
+            deliveryPhoto: 'https://images.unsplash.com/photo-1549931319-a545dcf3bc73?auto=format&fit=crop&q=80&w=200',
+            deliveryNotes: 'Mock Photo Proof uploaded. Handed over package safely to porch desk. Please provide Delivery 4-digit PIN code.',
+            messages: [
+              ...e.messages,
+              {
+                id: `msg-sim-${Date.now()}`,
+                senderRole: 'runner',
+                text: "Proof of Delivery complete! 📸 Please enter my OTP Verification code to release escrow hold balance.",
+                timestamp: new Date().toISOString()
+              }
+            ]
+          };
+        }
+        return e;
+      }));
     }
   };
 
@@ -570,6 +1159,8 @@ export const StateProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       currentUser,
       errands,
       products,
+      visitors,
+      transactions,
       activeCustomerTab,
       activeRunnerTab,
       activeVendorTab,
@@ -581,7 +1172,15 @@ export const StateProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       signupUser,
       logoutUser,
       createErrand,
+      fundAndPublishErrand,
       acceptErrand,
+      submitDeliveryProof,
+      verifyDeliveryOTP,
+      raiseDispute,
+      resolveDispute,
+      fundCustomerWallet,
+      withdrawRunnerEarnings,
+      updateRunnerVerification,
       advanceErrandStatus,
       cancelErrand,
       sendMessage,
@@ -591,6 +1190,8 @@ export const StateProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       deleteProduct,
       toggleProductAvailability,
       switchActiveRole,
+      logVisitorActivity,
+      sendThankYouToVisitor,
       
       setSelectedErrandId,
       setCustomerTab,
