@@ -6,6 +6,7 @@ import Signup from './components/Signup';
 import CustomerDashboard from './components/CustomerDashboard';
 import RunnerDashboard from './components/RunnerDashboard';
 import VendorDashboard from './components/VendorDashboard';
+import GuestDashboard from './components/GuestDashboard';
 import SupportFeedback from './components/SupportFeedback';
 
 function MainApp() {
@@ -25,8 +26,10 @@ function MainApp() {
         return <RunnerDashboard />;
       case 'vendor':
         return <VendorDashboard />;
+      case 'guest':
+        return <GuestDashboard />;
       default:
-        return <Onboarding />;
+        return <GuestDashboard />;
     }
   };
 

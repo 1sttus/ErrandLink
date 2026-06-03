@@ -22,6 +22,7 @@ export default function RunnerDashboard() {
     advanceErrandStatus,
     setSelectedErrandId,
     sendMessage,
+    switchActiveRole,
     logoutUser,
     setView
   } = useStore();
@@ -93,20 +94,31 @@ export default function RunnerDashboard() {
           </div>
         </div>
 
-        {/* Global Portals redirection shortcuts */}
+        {/* Global Action Switcher with active role switches & guest backlink */}
         <div className="flex items-center flex-wrap gap-2.5">
+          <div className="bg-surface-container px-3 py-1 flex items-center gap-2 rounded-xl border border-surface-container-high text-[11px] text-on-surface-variant font-bold">
+            <span>Active Mode:</span>
+            <button
+              onClick={() => switchActiveRole('customer')}
+              className="px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-850 rounded border border-indigo-150 cursor-pointer text-[10px]"
+            >
+              Customer
+            </button>
+            <button
+              onClick={() => switchActiveRole('vendor')}
+              className="px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-850 rounded border border-emerald-150 cursor-pointer text-[10px]"
+            >
+              Vendor
+            </button>
+          </div>
+
           <button
-            onClick={() => setView('customer')}
-            className="px-3.5 py-1.5 bg-surface-container hover:bg-surface-container-high text-xs font-bold text-primary rounded-xl border border-primary/10 flex items-center gap-1 cursor-pointer transition-colors"
+            onClick={() => setView('guest')}
+            className="px-3.5 py-1.5 bg-white/5 hover:bg-white/10 text-xs font-bold text-[#0b1c30] border border-[#0d1c25]/15 rounded-xl flex items-center gap-1 cursor-pointer transition-colors"
           >
-            <User className="w-3.5 h-3.5" /> Go to Customer Portal
+            <Store className="w-3.5 h-3.5" /> Browse as Guest
           </button>
-          <button
-            onClick={() => setView('vendor')}
-            className="px-3.5 py-1.5 bg-surface-container hover:bg-surface-container-high text-xs font-bold text-secondary rounded-xl border border-secondary/10 flex items-center gap-1 cursor-pointer transition-colors"
-          >
-            <Store className="w-3.5 h-3.5" /> Go to Vendor Portal
-          </button>
+
           <button
             onClick={logoutUser}
             className="p-2 bg-red-50 hover:bg-red-100 text-red-600 duration-200 rounded-xl cursor-pointer"

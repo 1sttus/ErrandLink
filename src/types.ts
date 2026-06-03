@@ -37,6 +37,8 @@ export interface VendorProduct {
   imageUrl: string;
   category: string;
   stock: number;
+  isAvailable?: boolean;
+  type?: 'good' | 'service';
 }
 
 export interface UserProfile {

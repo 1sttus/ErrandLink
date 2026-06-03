@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Errand, VendorProduct, UserProfile, UserRole, Message } from '../types';
 
 interface StateContextType {
-  currentView: 'onboarding' | 'login' | 'signup' | 'customer' | 'runner' | 'vendor';
+  currentView: 'onboarding' | 'login' | 'signup' | 'customer' | 'runner' | 'vendor' | 'guest';
   selectedRoleForOnboarding: UserRole | null;
   currentUser: UserProfile | null;
   errands: Errand[];
@@ -13,7 +13,7 @@ interface StateContextType {
   selectedErrandId: string | null;
   
   // Actions
-  setView: (view: 'onboarding' | 'login' | 'signup' | 'customer' | 'runner' | 'vendor') => void;
+  setView: (view: 'onboarding' | 'login' | 'signup' | 'customer' | 'runner' | 'vendor' | 'guest') => void;
   selectRoleForOnboarding: (role: UserRole | null) => void;
   loginUser: (role: UserRole, email?: string) => void;
   signupUser: (role: UserRole, name: string, email: string) => void;
@@ -28,6 +28,8 @@ interface StateContextType {
   createProduct: (product: Omit<VendorProduct, 'id'>) => void;
   orderProduct: (productId: string, quantity: number, address: string) => void;
   deleteProduct: (productId: string) => void;
+  toggleProductAvailability: (productId: string) => void;
+  switchActiveRole: (role: UserRole) => void;
   
   // Selection
   setSelectedErrandId: (id: string | null) => void;
@@ -178,7 +180,7 @@ const INITIAL_ERRANDS: Errand[] = [
 ];
 
 export const StateProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentView, setView] = useState<'onboarding' | 'login' | 'signup' | 'customer' | 'runner' | 'vendor'>('onboarding');
+  const [currentView, setView] = useState<'onboarding' | 'login' | 'signup' | 'customer' | 'runner' | 'vendor' | 'guest'>('guest');
   const [selectedRoleForOnboarding, selectRoleForOnboarding] = useState<UserRole | null>(null);
   
   // Persistent items using localStorage
@@ -224,8 +226,10 @@ export const StateProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     if (currentUser) {
       setView(currentUser.role);
+    } else {
+      setView('guest');
     }
-  }, []);
+  }, [currentUser]);
 
   const loginUser = (role: UserRole, email: string = '') => {
     // Generate mock profile based on role
@@ -417,6 +421,7 @@ export const StateProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const createProduct = (productData: Omit<VendorProduct, 'id'>) => {
     const newProduct: VendorProduct = {
       ...productData,
+      isAvailable: productData.isAvailable !== false, // Default to true
       id: `prod-${Math.random().toString(36).substr(2, 9)}`
     };
     setProducts(prev => [newProduct, ...prev]);
@@ -424,6 +429,18 @@ export const StateProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const deleteProduct = (productId: string) => {
     setProducts(prev => prev.filter(p => p.id !== productId));
+  };
+
+  const toggleProductAvailability = (productId: string) => {
+    setProducts(prev => prev.map(p => p.id === productId ? { ...p, isAvailable: p.isAvailable === false ? true : false } : p));
+  };
+
+  const switchActiveRole = (role: UserRole) => {
+    if (currentUser) {
+      const updatedProfile = { ...currentUser, role };
+      setCurrentUser(updatedProfile);
+      setView(role);
+    }
   };
 
   const orderProduct = (productId: string, quantity: number, deliverAddress: string) => {
@@ -572,6 +589,8 @@ export const StateProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       createProduct,
       orderProduct,
       deleteProduct,
+      toggleProductAvailability,
+      switchActiveRole,
       
       setSelectedErrandId,
       setCustomerTab,

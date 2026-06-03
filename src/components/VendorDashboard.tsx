@@ -20,6 +20,8 @@ export default function VendorDashboard() {
     setVendorTab,
     createProduct,
     deleteProduct,
+    toggleProductAvailability,
+    switchActiveRole,
     logoutUser,
     setView
   } = useStore();
@@ -31,6 +33,8 @@ export default function VendorDashboard() {
   const [stock, setStock] = useState(15);
   const [description, setDescription] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [type, setType] = useState<'good' | 'service'>('good');
+  const [isAvailable, setIsAvailable] = useState<boolean>(true);
 
   // Active deliveries listed as vendor order errands
   const activeVendorErrands = errands.filter(
@@ -53,7 +57,9 @@ export default function VendorDashboard() {
       category,
       stock: Number(stock),
       description,
-      imageUrl: img
+      imageUrl: img,
+      type,
+      isAvailable
     });
 
     // Reset Form
@@ -62,6 +68,8 @@ export default function VendorDashboard() {
     setStock(15);
     setDescription('');
     setImageUrl('');
+    setType('good');
+    setIsAvailable(true);
     setVendorTab('products');
   };
 
@@ -105,20 +113,31 @@ export default function VendorDashboard() {
           </div>
         </div>
 
-        {/* Portals Switches */}
+        {/* Portals Switches with Active Role toggles & Guest backlink */}
         <div className="flex items-center flex-wrap gap-2.5">
+          <div className="bg-surface-container px-3 py-1 flex items-center gap-2 rounded-xl border border-surface-container-high text-[11px] text-on-surface-variant font-bold">
+            <span>Active Mode:</span>
+            <button
+              onClick={() => switchActiveRole('customer')}
+              className="px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-850 rounded border border-indigo-150 cursor-pointer text-[10px]"
+            >
+              Customer
+            </button>
+            <button
+              onClick={() => switchActiveRole('runner')}
+              className="px-2 py-0.5 bg-orange-50 hover:bg-orange-100 text-orange-950 rounded border border-orange-200 cursor-pointer text-[10px]"
+            >
+              Runner
+            </button>
+          </div>
+
           <button
-            onClick={() => setView('customer')}
-            className="px-3.5 py-1.5 bg-surface-container hover:bg-surface-container-high text-xs font-bold text-primary rounded-xl border border-primary/10 flex items-center gap-1 cursor-pointer transition-colors"
+            onClick={() => setView('guest')}
+            className="px-3.5 py-1.5 bg-white/5 hover:bg-white/10 text-xs font-bold text-[#0b1c30] border border-[#0d1c25]/15 rounded-xl flex items-center gap-1 cursor-pointer transition-colors"
           >
-            <User className="w-3.5 h-3.5" /> Go to Customer Portal
+            <Store className="w-3.5 h-3.5" /> Browse as Guest
           </button>
-          <button
-            onClick={() => setView('runner')}
-            className="px-3.5 py-1.5 bg-surface-container hover:bg-surface-container-high text-xs font-bold text-orange-950 rounded-xl border border-orange-200 flex items-center gap-1 cursor-pointer transition-colors"
-          >
-            <Briefcase className="w-3.5 h-3.5" /> Go to Runner Portal
-          </button>
+          
           <button
             onClick={logoutUser}
             className="p-2 bg-red-50 hover:bg-red-100 text-red-600 duration-200 rounded-xl cursor-pointer"
@@ -262,40 +281,80 @@ export default function VendorDashboard() {
                   <h3 className="text-xs font-black uppercase text-on-surface-variant tracking-wider">
                     Current Catalogue ({products.length})
                   </h3>
+                  <span className="text-[10px] text-on-surface-variant italic">
+                    Tap status pills to toggle listing availability
+                  </span>
                 </div>
 
                 <div className="grid grid-cols-1 gap-3">
-                  {products.map((item) => (
-                    <div key={item.id} className="bg-surface-container-lowest border rounded-xl p-4 shadow-sm flex gap-4">
-                      <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-surface flex-shrink-0">
-                        <img referrerPolicy="no-referrer" src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" loading="lazy" />
-                      </div>
-                      
-                      <div className="flex-1 min-w-0 flex flex-col justify-between">
-                        <div>
-                          <div className="flex items-center justify-between">
-                            <h4 className="text-xs font-bold text-on-surface truncate pr-2">{item.name}</h4>
-                            <button 
-                              onClick={() => deleteProduct(item.id)}
-                              className="text-red-500 hover:text-red-700 p-1 cursor-pointer transition-colors"
-                              title="Delete Item"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                          
-                          <p className="text-[11px] text-on-surface-variant line-clamp-1 mt-0.5">{item.description}</p>
+                  {products.map((item) => {
+                    const isUnavailable = item.isAvailable === false;
+                    return (
+                      <div 
+                        key={item.id} 
+                        className={`bg-surface-container-lowest border rounded-xl p-4 shadow-sm flex gap-4 transition-all duration-205 ${
+                          isUnavailable ? 'border-red-500/20 bg-red-500/[0.01]' : ''
+                        }`}
+                      >
+                        <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-surface flex-shrink-0 relative">
+                          <img referrerPolicy="no-referrer" src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" loading="lazy" />
+                          {isUnavailable && (
+                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                              <span className="text-[7.5px] font-bold text-red-400 bg-red-950/80 px-1 py-0.5 rounded border border-red-500/30 uppercase">Draft</span>
+                            </div>
+                          )}
                         </div>
+                        
+                        <div className="flex-1 min-w-0 flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <h4 className="text-xs font-bold text-on-surface truncate">{item.name}</h4>
+                                <span className={`text-[8px] uppercase tracking-wider px-1.5 py-0.2 rounded font-extrabold shrink-0 ${
+                                  item.type === 'service' 
+                                    ? 'bg-blue-100 text-blue-700 border border-blue-200/50' 
+                                    : 'bg-amber-100 text-[#714d00]'
+                                }`}>
+                                  {item.type || 'good'}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleProductAvailability(item.id)}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-black uppercase cursor-pointer transition-colors ${
+                                    !isUnavailable
+                                      ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-400/20 hover:bg-emerald-500/20'
+                                      : 'bg-red-505/10 text-red-500 border border-red-400/20 hover:bg-red-500/20'
+                                  }`}
+                                  title="Click to toggle availability"
+                                >
+                                  {!isUnavailable ? '● Active' : '○ Draft'}
+                                </button>
 
-                        <div className="flex items-center justify-between text-xs pt-1.5">
-                          <span className="font-extrabold text-[#006c49]">Price: £{item.price.toFixed(2)}</span>
-                          <span className="font-mono text-[10px] bg-surface-container px-2 py-0.5 rounded-md font-medium">
-                            Stock: {item.stock} left
-                          </span>
+                                <button 
+                                  onClick={() => deleteProduct(item.id)}
+                                  className="text-red-500 hover:text-red-700 p-1 cursor-pointer transition-colors"
+                                  title="Delete Item"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                            
+                            <p className="text-[11px] text-on-surface-variant line-clamp-1 mt-0.5">{item.description}</p>
+                          </div>
+
+                          <div className="flex items-center justify-between text-xs pt-1.5">
+                            <span className="font-extrabold text-[#006c49]">Price: £{item.price.toFixed(2)}</span>
+                            <span className="font-mono text-[10px] bg-surface-container px-2 py-0.5 rounded-md font-medium">
+                              Stock: {item.stock} left
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -304,7 +363,36 @@ export default function VendorDashboard() {
                 <div className="bg-surface-container-lowest border rounded-2xl p-5 shadow-sm space-y-4">
                   <h3 className="text-sm font-black text-[#0b1c30]">Add New Item</h3>
                   
-                  <form onSubmit={handleCreateProductSubmit} className="space-y-3.5">
+                  <form onSubmit={handleCreateProductSubmit} className="space-y-3.5 text-left">
+                    {/* Good vs Service Classification Radio */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-on-surface-variant uppercase mb-1.5">Item Classification</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setType('good')}
+                          className={`py-1.5 px-3 rounded-lg text-xs font-bold border transition-all cursor-pointer text-center ${
+                            type === 'good'
+                              ? 'bg-secondary/15 border-secondary text-secondary-950'
+                              : 'bg-surface border-surface-container text-gray-500 hover:text-gray-800'
+                          }`}
+                        >
+                          Food / Good
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setType('service')}
+                          className={`py-1.5 px-3 rounded-lg text-xs font-bold border transition-all cursor-pointer text-center ${
+                            type === 'service'
+                              ? 'bg-blue-50 border-blue-500 text-blue-800'
+                              : 'bg-surface border-surface-container text-gray-500 hover:text-gray-800'
+                          }`}
+                        >
+                          Service / Offer
+                        </button>
+                      </div>
+                    </div>
+
                     <div>
                       <label className="block text-[11px] font-bold text-on-surface-variant uppercase mb-1">Product Name</label>
                       <input
@@ -338,21 +426,39 @@ export default function VendorDashboard() {
                           required
                           value={stock}
                           onChange={(e) => setStock(Number(e.target.value))}
-                          className="w-full h-10 px-3 bg-surface border border-surface-container rounded-lg text-xs focus:outline-none focus:border-primary text-on-surface"
+                          className="w-full h-10 px-3 bg-[#fbfbfb] border border-surface-container rounded-lg text-xs focus:outline-none focus:border-primary text-on-surface"
                         />
                       </div>
                     </div>
 
-                    <div>
-                      <label className="block text-[11px] font-bold text-on-surface-variant uppercase mb-1">Category</label>
-                      <input
-                        type="text"
-                        required
-                        value={category}
-                        onChange={(e) => setCategory(e.target.value)}
-                        placeholder="Bakery, Produce, Dairy..."
-                        className="w-full h-10 px-3 bg-surface border border-surface-container rounded-lg text-xs focus:outline-none focus:border-primary text-on-surface"
-                      />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-on-surface-variant uppercase mb-1">Category</label>
+                        <input
+                          type="text"
+                          required
+                          value={category}
+                          onChange={(e) => setCategory(e.target.value)}
+                          placeholder="Bakery, Produce, Dairy..."
+                          className="w-full h-10 px-3 bg-surface border border-surface-container rounded-lg text-xs focus:outline-none focus:border-primary text-on-surface"
+                        />
+                      </div>
+
+                      {/* Starting availability checkbox toggle */}
+                      <div>
+                        <label className="block text-[11px] font-bold text-on-surface-variant uppercase mb-1">Set Available</label>
+                        <button
+                          type="button"
+                          onClick={() => setIsAvailable(!isAvailable)}
+                          className={`w-full h-10 px-3 rounded-lg text-xs font-bold border transition-colors cursor-pointer text-center flex items-center justify-center ${
+                            isAvailable
+                              ? 'bg-emerald-50 border-emerald-400 text-emerald-800'
+                              : 'bg-red-50 border-red-300 text-red-800'
+                          }`}
+                        >
+                          {isAvailable ? 'Available Now' : 'Not at the moment'}
+                        </button>
+                      </div>
                     </div>
 
                     <div>
