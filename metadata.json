@@ -1,0 +1,6 @@
+{
+  "name": "ErrandLink",
+  "description": "A high-fidelity minimalist community matching platform connecting Customers, local product Vendors, and on-demand delivery Runners.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

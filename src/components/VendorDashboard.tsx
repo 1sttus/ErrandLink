@@ -1,0 +1,461 @@
+import React, { useState } from 'react';
+import { useStore } from '../context/StateContext';
+import { 
+  Store, ClipboardCheck, Package, ShoppingBag, Plus, Sparkles, LogOut,
+  MapPin, Clock, DollarSign, TrendingUp, User, Trash2, ArrowUpRight, CheckCircle2,
+  AlertCircle, ChevronRight, Briefcase
+} from 'lucide-react';
+import { motion } from 'motion/react';
+import { 
+  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid 
+} from 'recharts';
+import { VendorProduct, UserRole } from '../types';
+
+export default function VendorDashboard() {
+  const {
+    currentUser,
+    errands,
+    products,
+    activeVendorTab,
+    setVendorTab,
+    createProduct,
+    deleteProduct,
+    logoutUser,
+    setView
+  } = useStore();
+
+  // New Product Form State
+  const [name, setName] = useState('');
+  const [price, setPrice] = useState(5.99);
+  const [category, setCategory] = useState('Groceries');
+  const [stock, setStock] = useState(15);
+  const [description, setDescription] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+
+  // Active deliveries listed as vendor order errands
+  const activeVendorErrands = errands.filter(
+    e => e.category === 'vendor_order'
+  );
+
+  // Completed vendor orders
+  const completedVendorErrands = activeVendorErrands.filter(e => e.status === 'completed');
+
+  const handleCreateProductSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+
+    // Use a clean fallback image if empty
+    const img = imageUrl.trim() || 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&q=80&w=200';
+
+    createProduct({
+      name,
+      price: Number(price),
+      category,
+      stock: Number(stock),
+      description,
+      imageUrl: img
+    });
+
+    // Reset Form
+    setName('');
+    setPrice(5.99);
+    setStock(15);
+    setDescription('');
+    setImageUrl('');
+    setVendorTab('products');
+  };
+
+  // Mock sales analytics
+  const salesHistoryData = [
+    { day: 'Mon', sales: 12, revenue: 84.00 },
+    { day: 'Tue', sales: 18, revenue: 126.50 },
+    { day: 'Wed', sales: 15, revenue: 98.20 },
+    { day: 'Thu', sales: 24, revenue: 185.00 },
+    { day: 'Fri', sales: 29, revenue: 212.44 },
+    { day: 'Sat', sales: 42, revenue: 340.50 },
+    { day: 'Sun', sales: 20, revenue: 142.00 },
+  ];
+
+  return (
+    <div className="w-full min-h-screen bg-surface flex flex-col pt-0 pb-16">
+      {/* Top Header */}
+      <div className="w-full bg-surface-container-lowest border-b border-surface-container-high sticky top-0 z-20 shadow-sm px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-secondary/20 bg-secondary/10 flex items-center justify-center">
+            {currentUser?.avatarUrl ? (
+              <img src={currentUser.avatarUrl} alt={currentUser.name} className="w-full h-full object-cover" loading="lazy" />
+            ) : (
+              <span className="font-bold text-secondary">{currentUser?.name.charAt(0)}</span>
+            )}
+          </div>
+          <div>
+            <div className="flex items-center gap-1.5">
+              <h2 className="text-sm font-extrabold text-[#0b1c30]">{currentUser?.name}</h2>
+              <span className="text-[10px] uppercase font-bold tracking-wider bg-secondary-container/30 text-[#005236] px-2 py-0.5 rounded-full">
+                Vendor
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-on-surface-variant">
+              <span className="flex items-center gap-0.5 text-[#006c49] font-medium">
+                Store Rating: 4.8 ★
+              </span>
+              <span>•</span>
+              <span className="font-extrabold text-primary">Funds: £{currentUser?.balance.toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Portals Switches */}
+        <div className="flex items-center flex-wrap gap-2.5">
+          <button
+            onClick={() => setView('customer')}
+            className="px-3.5 py-1.5 bg-surface-container hover:bg-surface-container-high text-xs font-bold text-primary rounded-xl border border-primary/10 flex items-center gap-1 cursor-pointer transition-colors"
+          >
+            <User className="w-3.5 h-3.5" /> Go to Customer Portal
+          </button>
+          <button
+            onClick={() => setView('runner')}
+            className="px-3.5 py-1.5 bg-surface-container hover:bg-surface-container-high text-xs font-bold text-orange-950 rounded-xl border border-orange-200 flex items-center gap-1 cursor-pointer transition-colors"
+          >
+            <Briefcase className="w-3.5 h-3.5" /> Go to Runner Portal
+          </button>
+          <button
+            onClick={logoutUser}
+            className="p-2 bg-red-50 hover:bg-red-100 text-red-600 duration-200 rounded-xl cursor-pointer"
+            title="Logout"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      <div className="w-full max-w-[1240px] mx-auto px-4 md:px-8 mt-8 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* Navigation panel */}
+        <div className="lg:col-span-3 space-y-3">
+          <div className="bg-surface-container-lowest p-4 rounded-2xl border border-surface-container shadow-sm">
+            <h3 className="text-xs font-black uppercase tracking-widest text-[#434655] mb-3 px-2">
+              Merchant Hub
+            </h3>
+            <div className="flex flex-col gap-1.5">
+              <button
+                onClick={() => setVendorTab('orders')}
+                className={`w-full flex items-center justify-between px-4 py-3 text-sm font-bold rounded-xl transition-all cursor-pointer ${
+                  activeVendorTab === 'orders'
+                    ? 'bg-primary text-on-primary shadow-sm'
+                    : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <ClipboardCheck className="w-4 h-4" /> Transit Dispatch
+                </div>
+                {activeVendorErrands.length > 0 && (
+                  <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${
+                    activeVendorTab === 'orders' ? 'bg-white text-primary' : 'bg-secondary text-white'
+                  }`}>
+                    {activeVendorErrands.length}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setVendorTab('products')}
+                className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-xl transition-all cursor-pointer ${
+                  activeVendorTab === 'products'
+                    ? 'bg-primary text-on-primary shadow-sm'
+                    : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'
+                }`}
+              >
+                <Package className="w-4 h-4" /> Manage Inventory
+              </button>
+              <button
+                onClick={() => setVendorTab('analytics')}
+                className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-bold rounded-xl transition-all cursor-pointer ${
+                  activeVendorTab === 'analytics'
+                    ? 'bg-primary text-on-primary shadow-sm'
+                    : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'
+                }`}
+              >
+                <TrendingUp className="w-4 h-4" /> Bakery Revenue
+              </button>
+            </div>
+          </div>
+
+          <div className="p-4 bg-secondary-container/10 border border-secondary-container/20 rounded-2xl">
+            <h4 className="text-xs font-bold text-secondary flex items-center gap-1 mb-1">
+              <Sparkles className="w-3.5 h-3.5" /> Market Logistics
+            </h4>
+            <p className="text-[11px] text-on-surface-variant leading-relaxed">
+              When Customers buy items from your catalogue in their <strong>Organic Bazaar</strong> tab, and type their address, ErrandLink automatically spawns a delivery courier job on the community board!
+            </p>
+          </div>
+        </div>
+
+        {/* Content Body */}
+        <div className="lg:col-span-9">
+          {activeVendorTab === 'orders' && (
+            <div className="space-y-4">
+              <h2 className="text-xl font-black text-[#0b1c30] tracking-tight">Active Dispatch Deliveries</h2>
+              <p className="text-xs text-on-surface-variant">
+                Observe delivery transit status of customer orders dispatched from your retail store
+              </p>
+
+              {activeVendorErrands.length === 0 ? (
+                <div className="p-10 border border-dashed border-surface-container bg-surface-container-lowest text-center rounded-2xl">
+                  <AlertCircle className="w-9 h-9 text-outline mx-auto mb-2" />
+                  <p className="text-xs font-bold text-on-surface">No active dispatches</p>
+                  <p className="text-[11px] text-on-surface-variant mt-1">
+                    Once a Customer places an order, it will appear here instantly.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {activeVendorErrands.map((e) => (
+                    <div key={e.id} className="bg-surface-container-lowest border border-surface-container p-5 rounded-2xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-[10px] bg-secondary-container/20 text-[#00714d] px-2 py-0.5 rounded font-bold uppercase tracking-wider">
+                            Order Dispatched
+                          </span>
+                          <span className="text-[10px] text-on-surface-variant font-mono">Job ID: {e.id}</span>
+                        </div>
+                        <h3 className="text-sm font-bold text-on-surface mt-2">{e.title}</h3>
+                        <p className="text-xs text-on-surface-variant mt-0.5 flex items-center gap-1">
+                          <MapPin className="w-3.5 h-3.5 text-outline" /> Deliver to: {e.location}
+                        </p>
+                        <span className="text-[11px] text-primary font-bold block mt-1.5">
+                          Client: {e.customerName}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-col gap-2 items-start md:items-end">
+                        <span className="text-xs font-black text-on-surface">
+                          Courier Reward: £{e.payout.toFixed(2)}
+                        </span>
+                        
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <span className={`w-2 h-2 rounded-full ${
+                            e.status === 'completed' ? 'bg-[#006c49]' :
+                            e.status === 'posted' ? 'bg-orange-500' : 'bg-primary'
+                          }`}></span>
+                          <span className="text-xs uppercase tracking-wider font-extrabold">
+                            {e.status === 'posted' ? 'Seeking Courier' :
+                             e.status === 'assigned' ? 'Runner Assigned' :
+                             e.status === 'in_progress' ? 'In Transit' : 'Succeeded'}
+                          </span>
+                        </div>
+                        
+                        <span className="text-[10px] text-outline">
+                          {e.runnerName ? `Assigned to: ${e.runnerName}` : 'Waiting on board'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeVendorTab === 'products' && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Product list catalog */}
+              <div className="lg:col-span-7 space-y-4">
+                <div className="flex justify-between items-center px-1">
+                  <h3 className="text-xs font-black uppercase text-on-surface-variant tracking-wider">
+                    Current Catalogue ({products.length})
+                  </h3>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3">
+                  {products.map((item) => (
+                    <div key={item.id} className="bg-surface-container-lowest border rounded-xl p-4 shadow-sm flex gap-4">
+                      <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-surface flex-shrink-0">
+                        <img referrerPolicy="no-referrer" src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" loading="lazy" />
+                      </div>
+                      
+                      <div className="flex-1 min-w-0 flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-xs font-bold text-on-surface truncate pr-2">{item.name}</h4>
+                            <button 
+                              onClick={() => deleteProduct(item.id)}
+                              className="text-red-500 hover:text-red-700 p-1 cursor-pointer transition-colors"
+                              title="Delete Item"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          
+                          <p className="text-[11px] text-on-surface-variant line-clamp-1 mt-0.5">{item.description}</p>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs pt-1.5">
+                          <span className="font-extrabold text-[#006c49]">Price: £{item.price.toFixed(2)}</span>
+                          <span className="font-mono text-[10px] bg-surface-container px-2 py-0.5 rounded-md font-medium">
+                            Stock: {item.stock} left
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Add product form */}
+              <div className="lg:col-span-5">
+                <div className="bg-surface-container-lowest border rounded-2xl p-5 shadow-sm space-y-4">
+                  <h3 className="text-sm font-black text-[#0b1c30]">Add New Item</h3>
+                  
+                  <form onSubmit={handleCreateProductSubmit} className="space-y-3.5">
+                    <div>
+                      <label className="block text-[11px] font-bold text-on-surface-variant uppercase mb-1">Product Name</label>
+                      <input
+                        type="text"
+                        required
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="e.g. Sourdough Pretzel"
+                        className="w-full h-10 px-3 bg-surface border border-surface-container rounded-lg text-xs focus:outline-none focus:border-primary text-on-surface"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-on-surface-variant uppercase mb-1">Unit Price (£)</label>
+                        <input
+                          type="number"
+                          step="0.10"
+                          min="0.5"
+                          required
+                          value={price}
+                          onChange={(e) => setPrice(Number(e.target.value))}
+                          className="w-full h-10 px-3 bg-surface border border-surface-container rounded-lg text-xs focus:outline-none focus:border-primary text-on-surface font-semibold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-on-surface-variant uppercase mb-1">Init Stock</label>
+                        <input
+                          type="number"
+                          min="1"
+                          required
+                          value={stock}
+                          onChange={(e) => setStock(Number(e.target.value))}
+                          className="w-full h-10 px-3 bg-surface border border-surface-container rounded-lg text-xs focus:outline-none focus:border-primary text-on-surface"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-on-surface-variant uppercase mb-1">Category</label>
+                      <input
+                        type="text"
+                        required
+                        value={category}
+                        onChange={(e) => setCategory(e.target.value)}
+                        placeholder="Bakery, Produce, Dairy..."
+                        className="w-full h-10 px-3 bg-surface border border-surface-container rounded-lg text-xs focus:outline-none focus:border-primary text-on-surface"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-on-surface-variant uppercase mb-1">Product Photo URL</label>
+                      <input
+                        type="url"
+                        value={imageUrl}
+                        onChange={(e) => setImageUrl(e.target.value)}
+                        placeholder="https://..."
+                        className="w-full h-10 px-3 bg-surface border border-surface-container rounded-lg text-xs focus:outline-none focus:border-primary text-on-surface"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-on-surface-variant uppercase mb-1">Brief Description</label>
+                      <textarea
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        rows={2}
+                        placeholder="Tell shoppers why they will love this fresh item..."
+                        className="w-full p-3 bg-surface border border-surface-container rounded-lg text-xs focus:outline-none focus:border-primary text-on-surface"
+                      ></textarea>
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full h-10 bg-secondary text-on-secondary hover:bg-[#005236] transition-colors font-extrabold text-xs rounded-xl flex items-center justify-center gap-1 cursor-pointer shadow-sm"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> List Item For Sale
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeVendorTab === 'analytics' && (
+            <div className="space-y-6">
+              {/* Top Row overview cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="p-5 bg-surface-container-lowest border rounded-2xl shadow-sm text-left">
+                  <span className="text-xs font-bold text-on-surface-variant block uppercase tracking-wider">
+                    Store Revenue
+                  </span>
+                  <div className="text-2xl font-black text-[#006c49] mt-1.5">
+                    £{currentUser?.balance.toFixed(2)}
+                  </div>
+                  <span className="text-[10px] text-[#00714d] block mt-1 font-extrabold">▲ +12.4% weekly profit</span>
+                </div>
+
+                <div className="p-5 bg-surface-container-lowest border rounded-2xl shadow-sm text-left">
+                  <span className="text-xs font-bold text-on-surface-variant block uppercase tracking-wider">
+                    Completed Deliveries
+                  </span>
+                  <div className="text-2xl font-black text-primary mt-1.5">
+                    {completedVendorErrands.length} Orders
+                  </div>
+                  <span className="text-[10px] text-on-surface-variant block mt-1 font-medium">All-time dispatch count</span>
+                </div>
+
+                <div className="p-5 bg-surface-container-lowest border rounded-2xl shadow-sm text-left">
+                  <span className="text-xs font-bold text-on-surface-variant block uppercase tracking-wider">
+                    Customer Satisfaction
+                  </span>
+                  <div className="text-2xl font-black text-amber-600 mt-1.5">
+                    4.9 / 5.0
+                  </div>
+                  <span className="text-[10px] text-on-surface-variant block mt-1 font-medium">Verified by ErrandLink feedback</span>
+                </div>
+              </div>
+
+              {/* Weekly incoming revenue area chart graphic */}
+              <div className="bg-surface-container-lowest border rounded-3xl p-6 shadow-sm">
+                <div className="mb-4">
+                  <h3 className="text-sm font-black text-[#0b1c30]">Weekly Sales & Revenue (£)</h3>
+                  <p className="text-xs text-on-surface-variant">Merchant receipts from direct customer marketplace purchases</p>
+                </div>
+
+                <div className="w-full h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={salesHistoryData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#006c49" stopOpacity={0.2}/>
+                          <stop offset="95%" stopColor="#006c49" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EFF4FF" />
+                      <XAxis dataKey="day" fontSize={11} stroke="#737686" />
+                      <YAxis fontSize={11} stroke="#737686" />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', borderColor: '#e5eeff' }}
+                        itemStyle={{ fontSize: '11px', fontWeight: 'bold' }}
+                      />
+                      <Area type="monotone" dataKey="revenue" stroke="#006c49" fillOpacity={1} fill="url(#colorRevenue)" strokeWidth={2.5} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
